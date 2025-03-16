@@ -4,7 +4,7 @@
   "description": "CLI tool to explore and document KLB API endpoints",
   "main": "index.js",
   "bin": {
-    "klbfw-describe": "./index.js"
+    "klbfw-describe": "index.js"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -19,7 +19,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/KarpelesLab/klbfw-describe.git"
+    "url": "git+https://github.com/KarpelesLab/klbfw-describe.git"
   },
   "bugs": {
     "url": "https://github.com/KarpelesLab/klbfw-describe/issues"
