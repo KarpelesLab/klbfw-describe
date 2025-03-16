@@ -68,7 +68,7 @@ const colors = {
 function describeApi(apiPath, options = {}) {
   const { rawOutput = false, fullOutput = false, typeScriptOutput = false, host = DEFAULT_API_HOST } = options;
   
-  console.log(`\n${colors.bright}${colors.blue}Describing API endpoint:[0m ${colors.green}${apiPath}${colors.reset}`);
+  console.log(`\n${colors.bright}${colors.blue}Describing API endpoint:${colors.reset} ${colors.green}${apiPath}${colors.reset}`);
   console.log(`${colors.dim}Host: ${host}${colors.reset}\n`);
   
   const reqUrl = url.parse(`https://${host}${API_PREFIX}${apiPath}`);
