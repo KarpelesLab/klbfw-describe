@@ -13,12 +13,14 @@
  * 
  * Options:
  *   --raw         Show raw JSON output without formatting
+ *   --full        Show complete field lists and details without raw JSON
  *   --host <host> Specify a custom API host (default: hub.atonline.com)
  * 
  * Examples:
  *   npx @karpeleslab/klbfw-describe User
  *   npx @karpeleslab/klbfw-describe Misc/Debug
  *   npx @karpeleslab/klbfw-describe Misc/Debug:testUpload
+ *   npx @karpeleslab/klbfw-describe --full User
  *   npx @karpeleslab/klbfw-describe --raw User
  */
 
@@ -62,7 +64,7 @@ const colors = {
  * Perform an OPTIONS request to the specified API endpoint
  */
 function describeApi(apiPath, options = {}) {
-  const { rawOutput = false, host = DEFAULT_API_HOST } = options;
+  const { rawOutput = false, fullOutput = false, host = DEFAULT_API_HOST } = options;
   
   console.log(`\n${colors.bright}${colors.blue}Describing API endpoint:[0m ${colors.green}${apiPath}${colors.reset}`);
   console.log(`${colors.dim}Host: ${host}${colors.reset}\n`);
@@ -102,7 +104,7 @@ function describeApi(apiPath, options = {}) {
           console.log(JSON.stringify(jsonData, null, 2));
         } else {
           // Formatted output
-          formatJsonResponse(jsonData);
+          formatJsonResponse(jsonData, { fullOutput });
         }
       } catch (e) {
         // If not JSON, output as text
@@ -131,7 +133,8 @@ function formatHeaders(headers) {
 /**
  * Format JSON response in a more readable way
  */
-function formatJsonResponse(jsonData) {
+function formatJsonResponse(jsonData, options = {}) {
+  const { fullOutput = false } = options;
   if (!jsonData.data) {
     console.log(`${colors.red}Error: No API data found in response${colors.reset}`);
     return;
@@ -261,11 +264,13 @@ function formatJsonResponse(jsonData) {
       console.log(`${colors.cyan}Primary Key:${colors.reset} ${data.table.Struct._primary.join(', ')}`);
     }
     
-    // Show first few fields as examples
-    const sampleFields = fields.slice(0, 5);
-    if (sampleFields.length > 0) {
-      console.log(`\n${colors.bright}Sample Fields:${colors.reset}`);
-      sampleFields.forEach(field => {
+    // Determine which fields to show
+    const fieldList = fullOutput ? fields : fields.slice(0, 5);
+    const headerText = fullOutput ? 'All Fields:' : 'Sample Fields:';
+    
+    if (fieldList.length > 0) {
+      console.log(`\n${colors.bright}${headerText}${colors.reset}`);
+      fieldList.forEach(field => {
         const info = data.table.Struct[field];
         let fieldDesc = `  ${colors.yellow}${field}${colors.reset}`;
         if (info.type) {
@@ -279,12 +284,14 @@ function formatJsonResponse(jsonData) {
         console.log(fieldDesc);
       });
       
-      if (fields.length > 5) {
+      if (!fullOutput && fields.length > 5) {
         console.log(`  ${colors.dim}...and ${fields.length - 5} more fields${colors.reset}`);
       }
     }
     
-    console.log(`\n${colors.dim}Use --raw for complete field definitions${colors.reset}`);
+    if (!fullOutput) {
+      console.log(`\n${colors.dim}Use --full for complete field listings or --raw for raw JSON${colors.reset}`);
+    }
   }
   
   // Display available functions
@@ -294,18 +301,44 @@ function formatJsonResponse(jsonData) {
       console.log(`  ${colors.green}${func.name}${colors.reset}${func.static ? ' (static)' : ''}`);
       
       if (func.args && func.args.length > 0) {
-        const argList = func.args.map(arg => {
-          let str = arg.name;
-          if (arg.required) str += '*';
-          if (arg.type) str += `: ${arg.type}`;
-          return str;
-        }).join(', ');
-        
-        console.log(`    ${colors.dim}Arguments: ${argList}${colors.reset}`);
+        // For full output, show each argument on its own line with details
+        if (fullOutput) {
+          console.log(`    ${colors.dim}Arguments:${colors.reset}`);
+          func.args.forEach(arg => {
+            let argDesc = `      ${colors.yellow}${arg.name}${colors.reset}`;
+            if (arg.type) {
+              argDesc += ` (${arg.type})`;
+            }
+            if (arg.required) {
+              argDesc += ` ${colors.red}*${colors.reset}`;
+            }
+            console.log(argDesc);
+            
+            // Show description if available
+            if (arg.description) {
+              console.log(`        ${colors.dim}${arg.description}${colors.reset}`);
+            }
+          });
+        } else {
+          // For regular output, show compact inline list
+          const argList = func.args.map(arg => {
+            let str = arg.name;
+            if (arg.required) str += '*';
+            if (arg.type) str += `: ${arg.type}`;
+            return str;
+          }).join(', ');
+          
+          console.log(`    ${colors.dim}Arguments: ${argList}${colors.reset}`);
+        }
       }
       
       if (func.return_type) {
         console.log(`    ${colors.dim}Returns: ${func.return_type}${colors.reset}`);
+      }
+      
+      // Show description if available and using full output
+      if (fullOutput && func.description) {
+        console.log(`    ${colors.dim}Description: ${func.description}${colors.reset}`);
       }
     });
   }
@@ -340,18 +373,21 @@ function printUsage() {
   console.log(`${colors.bright}Usage:${colors.reset} npx @karpeleslab/klbfw-describe [options] <api-path>`);
   console.log(`\n${colors.bright}Options:${colors.reset}`);
   console.log(`  --raw              Show raw JSON output without formatting`);
+  console.log(`  --full             Show complete field lists and details without raw JSON`);
   console.log(`  --host <hostname>  Specify a custom API host (default: ${DEFAULT_API_HOST})`);
   console.log(`  --help, -h         Show this help message`);
   console.log(`\n${colors.bright}Examples:${colors.reset}`);
   console.log(`  npx @karpeleslab/klbfw-describe User`);
   console.log(`  npx @karpeleslab/klbfw-describe Misc/Debug`);
   console.log(`  npx @karpeleslab/klbfw-describe Misc/Debug:testUpload`);
+  console.log(`  npx @karpeleslab/klbfw-describe --full User`);
   console.log(`  npx @karpeleslab/klbfw-describe --raw User`);
   console.log(`  npx @karpeleslab/klbfw-describe --host api.example.com User`);
 }
 
 // Parse command line arguments
 let rawOutput = false;
+let fullOutput = false;
 let apiPath = null;
 let host = DEFAULT_API_HOST;
 
@@ -361,6 +397,8 @@ for (let i = 0; i < args.length; i++) {
   
   if (arg === '--raw') {
     rawOutput = true;
+  } else if (arg === '--full') {
+    fullOutput = true;
   } else if (arg === '--host' && i + 1 < args.length) {
     host = args[++i];
   } else if (arg === '--help' || arg === '-h') {
@@ -377,4 +415,4 @@ if (!apiPath) {
 }
 
 // Execute the API description
-describeApi(apiPath, { rawOutput, host });
+describeApi(apiPath, { rawOutput, fullOutput, host });

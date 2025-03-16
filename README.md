@@ -26,6 +26,7 @@ npx @karpeleslab/klbfw-describe [options] <api-path>
 ### Options
 
 - `--raw`: Show raw JSON output without formatting
+- `--full`: Show complete field lists and details without raw JSON
 - `--host <hostname>`: Specify a custom API host (default: hub.atonline.com)
 - `--help`, `-h`: Show help message
 
@@ -41,6 +42,9 @@ npx @karpeleslab/klbfw-describe Misc/Debug
 # Describe a procedure
 npx @karpeleslab/klbfw-describe Misc/Debug:testUpload
 
+# Get detailed fields and information
+npx @karpeleslab/klbfw-describe --full User
+
 # Get raw JSON output
 npx @karpeleslab/klbfw-describe --raw User
 
@@ -55,7 +59,11 @@ npx @karpeleslab/klbfw-describe --host api.example.com User
 - Displays API endpoint type (Procedure, Resource, or Collection)
 - Shows code examples for calling procedures
 - Lists arguments with their types and required status
-- Displays sample fields for resources
+- Three output modes:
+  - Default: Shows a condensed view with sample fields
+  - `--full`: Shows complete field listings and detailed information
+  - `--raw`: Shows the raw JSON response for advanced needs
+- Displays sample or complete fields for resources
 - Groups sub-endpoints alphabetically for easy reference
 
 ## Output
