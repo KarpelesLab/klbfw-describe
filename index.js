@@ -233,7 +233,11 @@ function generateProcedureTypes(data) {
   
   console.log(` * };`);
   console.log(` * `);
-  console.log(` * const response = await klbfw.rest<${interfaceName}Response>('${path}:${funcName}', 'POST', request);`);
+  if (procedure.static) {
+    console.log(` * const response = await klbfw.rest<${interfaceName}Response>('${path}:${funcName}', 'POST', request);`);
+  } else {
+    console.log(` * const response = await klbfw.rest<${interfaceName}Response>('${path}/\${id}:${funcName}', 'POST', request);`);
+  }
   console.log(` */`);
 }
 
@@ -345,6 +349,33 @@ function generateMethodTypes(data) {
       console.log(`  data: any; // Replace with specific structure if known`);
       console.log(`}\n`);
     }
+    
+    // Generate usage example as a comment
+    console.log(`/**`);
+    console.log(` * Usage Example:`);
+    console.log(` * `);
+    
+    const path = data.Path ? data.Path.join('/') : '';
+    const funcName = func.name;
+    
+    console.log(` * // TypeScript`);
+    console.log(` * const request: ${interfaceName}Request = {`);
+    
+    if (func.args && func.args.length > 0) {
+      func.args.forEach(arg => {
+        const exampleValue = getExampleValue(arg.type);
+        console.log(`  * ${arg.name}: ${exampleValue},`);
+      });
+    }
+    
+    console.log(` * };`);
+    console.log(` * `);
+    if (func.static) {
+      console.log(` * const response = await klbfw.rest<${interfaceName}Response>('${path}:${funcName}', 'POST', request);`);
+    } else {
+      console.log(` * const response = await klbfw.rest<${interfaceName}Response>('${path}/\${id}:${funcName}', 'POST', request);`);
+    }
+    console.log(` */\n`);
   });
 }
 
@@ -568,7 +599,11 @@ function formatJsonResponse(jsonData, options = {}) {
       });
       
       console.log(`${colors.dim}# JavaScript${colors.reset}`);
-      console.log(`klbfw.rest('${pathStr}:${procName}', 'POST', {${argPairs.join(', ')}})`);
+      if (data.procedure.static) {
+        console.log(`klbfw.rest('${pathStr}:${procName}', 'POST', {${argPairs.join(', ')}})`);
+      } else {
+        console.log(`klbfw.rest('${pathStr}/\${id}:${procName}', 'POST', {${argPairs.join(', ')}})`);
+      }
       
       // URL format for direct GET requests if applicable
       if (data.allowed_methods.includes('GET') && args.length > 0) {
@@ -588,7 +623,11 @@ function formatJsonResponse(jsonData, options = {}) {
         }).join('&');
         
         console.log(`\n${colors.dim}# URL Format${colors.reset}`);
-        console.log(`GET /_rest/${pathStr}:${procName}?${queryParams}`);
+        if (data.procedure.static) {
+          console.log(`GET /_rest/${pathStr}:${procName}?${queryParams}`);
+        } else {
+          console.log(`GET /_rest/${pathStr}/\${id}:${procName}?${queryParams}`);
+        }
       }
     }
     
@@ -721,6 +760,36 @@ function formatJsonResponse(jsonData, options = {}) {
       }
       if (func.return_description) {
         console.log(`    ${colors.dim}Return Description: ${func.return_description}${colors.reset}`);
+      }
+      
+      // Show usage example
+      if (data.Path) {
+        const pathStr = data.Path.join('/');
+        const funcName = func.name;
+        console.log(`    ${colors.bright}Usage:${colors.reset}`);
+        
+        // Arguments for usage example
+        const args = func.args || [];
+        const argPairs = args.map(arg => {
+          const argName = arg.name;
+          let argValue;
+          
+          // Provide appropriate sample values based on type
+          switch(arg.type) {
+            case 'bool':   argValue = 'true'; break;
+            case 'number': argValue = '123'; break;
+            case 'string': argValue = '"value"'; break;
+            default:       argValue = '"..."'; break;
+          }
+          
+          return `${argName}: ${argValue}`;
+        });
+        
+        if (func.static) {
+          console.log(`    ${colors.dim}klbfw.rest('${pathStr}:${funcName}', 'POST', {${argPairs.join(', ')}})${colors.reset}`);
+        } else {
+          console.log(`    ${colors.dim}klbfw.rest('${pathStr}/\${id}:${funcName}', 'POST', {${argPairs.join(', ')}})${colors.reset}`);
+        }
       }
       
       // Add a couple of empty lines between methods for better readability
