@@ -12,9 +12,10 @@
  *   npx @karpeleslab/klbfw-describe [options] <api-path>
  * 
  * Options:
- *   --raw         Show raw JSON output without formatting
- *   --full        Show complete field lists and details without raw JSON
- *   --host <host> Specify a custom API host (default: hub.atonline.com)
+ *   --raw          Show raw JSON output without formatting
+ *   --full         Show complete field lists and details without raw JSON
+ *   --ts, --types  Generate TypeScript type definitions
+ *   --host <host>  Specify a custom API host (default: hub.atonline.com)
  * 
  * Examples:
  *   npx @karpeleslab/klbfw-describe User
@@ -22,6 +23,7 @@
  *   npx @karpeleslab/klbfw-describe Misc/Debug:testUpload
  *   npx @karpeleslab/klbfw-describe --full User
  *   npx @karpeleslab/klbfw-describe --raw User
+ *   npx @karpeleslab/klbfw-describe --ts User
  */
 
 const https = require('https');
@@ -64,7 +66,7 @@ const colors = {
  * Perform an OPTIONS request to the specified API endpoint
  */
 function describeApi(apiPath, options = {}) {
-  const { rawOutput = false, fullOutput = false, host = DEFAULT_API_HOST } = options;
+  const { rawOutput = false, fullOutput = false, typeScriptOutput = false, host = DEFAULT_API_HOST } = options;
   
   console.log(`\n${colors.bright}${colors.blue}Describing API endpoint:[0m ${colors.green}${apiPath}${colors.reset}`);
   console.log(`${colors.dim}Host: ${host}${colors.reset}\n`);
@@ -102,6 +104,9 @@ function describeApi(apiPath, options = {}) {
           // Raw JSON output without formatting
           console.log('\n' + colors.bright + 'Raw Response:' + colors.reset);
           console.log(JSON.stringify(jsonData, null, 2));
+        } else if (typeScriptOutput) {
+          // TypeScript definition output
+          generateTypeScriptDefinitions(jsonData);
         } else {
           // Formatted output
           formatJsonResponse(jsonData, { fullOutput });
@@ -128,6 +133,351 @@ function formatHeaders(headers) {
   return Object.keys(headers).map(key => {
     return `\n  ${colors.cyan}${key}:${colors.reset} ${headers[key]}`;
   }).join('');
+}
+
+/**
+ * Generate TypeScript type definitions for API structures
+ */
+function generateTypeScriptDefinitions(jsonData) {
+  if (!jsonData.data) {
+    console.log(`${colors.red}Error: No API data found in response${colors.reset}`);
+    return;
+  }
+  
+  const data = jsonData.data;
+  const apiPath = data.Path ? data.Path.join('/') : 'Unknown';
+  
+  console.log(`\n${colors.bright}${colors.blue}TypeScript definitions for:${colors.reset} ${colors.green}${apiPath}${colors.reset}\n`);
+  
+  // Handle procedures (methods)
+  if (data.procedure) {
+    generateProcedureTypes(data);
+    return;
+  }
+  
+  // Handle resource objects (table-based)
+  if (data.table) {
+    generateResourceTypes(data);
+  }
+  
+  // Handle available methods (functions)
+  if (data.func && data.func.length > 0) {
+    generateMethodTypes(data);
+  }
+}
+
+/**
+ * Generate TypeScript types for a procedure (method)
+ */
+function generateProcedureTypes(data) {
+  const procedure = data.procedure;
+  const pathName = data.Path ? data.Path.join('') : 'Unknown';
+  const interfaceName = `I${pathName}${pascalCase(procedure.name)}`;
+  
+  console.log(`/**\n * ${procedure.name} procedure interface\n */`);
+  
+  // Generate request interface
+  console.log(`export interface ${interfaceName}Request {`);
+  
+  if (procedure.args && procedure.args.length > 0) {
+    procedure.args.forEach(arg => {
+      const optional = !arg.required ? '?' : '';
+      
+      // For foreign key references (fields ending with __)
+      let type = 'any';
+      if (arg.name.endsWith('__')) {
+        type = 'string'; // UUID reference
+      } else if (arg.name === 'erase' || arg.name.startsWith('is_') || arg.name.startsWith('has_')) {
+        type = 'boolean';
+      } else if (arg.name.includes('password')) {
+        type = 'string';
+      } else if (arg.name.endsWith('_id') || arg.name.includes('Id')) {
+        type = 'string';
+      } else if (arg.type) {
+        type = mapToTsType(arg.type, arg);
+      }
+      
+      const comment = arg.description ? ` // ${arg.description}` : '';
+      
+      console.log(`  ${arg.name}${optional}: ${type};${comment}`);
+    });
+  }
+  
+  console.log(`}\n`);
+  
+  // Generate response interface if known
+  if (procedure.return_type) {
+    console.log(`export interface ${interfaceName}Response {`);
+    console.log(`  // Return type: ${procedure.return_type}`);
+    console.log(`  data: any; // Replace with specific structure if known`);
+    console.log(`}\n`);
+  }
+  
+  // Generate usage example as a comment
+  console.log(`/**`);
+  console.log(` * Usage Example:`);
+  console.log(` * `);
+  
+  const path = data.Path ? data.Path.join('/') : '';
+  const funcName = procedure.name;
+  
+  console.log(` * // TypeScript`);
+  console.log(` * const request: ${interfaceName}Request = {`);
+  
+  if (procedure.args && procedure.args.length > 0) {
+    procedure.args.forEach(arg => {
+      const exampleValue = getExampleValue(arg.type);
+      console.log(`  * ${arg.name}: ${exampleValue},`);
+    });
+  }
+  
+  console.log(` * };`);
+  console.log(` * `);
+  console.log(` * const response = await klbfw.rest<${interfaceName}Response>('${path}:${funcName}', 'POST', request);`);
+  console.log(` */`);
+}
+
+/**
+ * Generate TypeScript types for a resource (table-based object)
+ */
+function generateResourceTypes(data) {
+  const table = data.table;
+  const pathName = data.Path ? data.Path.join('') : 'Unknown';
+  const interfaceName = `I${pathName}`;
+  
+  console.log(`/**\n * ${table.Name} resource interface\n */`);
+  console.log(`export interface ${interfaceName} {`);
+  
+  // Add fields from the structure
+  if (table.Struct) {
+    const fields = Object.keys(table.Struct).filter(key => !key.startsWith('_'));
+    
+    fields.forEach(field => {
+      const info = table.Struct[field];
+      const optional = info.null !== false ? '?' : '';
+      const type = mapToTsType(info.type, info);
+      
+      // Add comment for special fields or validators
+      let comment = '';
+      if (info.validator) {
+        comment = ` // ${info.validator}`;
+      } else if (info.protect) {
+        comment = ` // protected`;
+      }
+      
+      console.log(`  ${field}${optional}: ${type};${comment}`);
+    });
+  }
+  
+  console.log(`}\n`);
+  
+  // Generate ID type if there's a primary key
+  if (table.Struct && table.Struct._primary) {
+    const primaryKeys = table.Struct._primary;
+    
+    if (primaryKeys.length === 1) {
+      const keyField = primaryKeys[0];
+      const keyInfo = table.Struct[keyField] || {};
+      const keyType = keyInfo ? mapToTsType(keyInfo.type, keyInfo) : 'string';
+      
+      console.log(`/**\n * ID type for ${table.Name}\n */`);
+      console.log(`export type ${interfaceName}ID = ${keyType};\n`);
+    } else if (primaryKeys.length > 1) {
+      console.log(`/**\n * Composite ID type for ${table.Name}\n */`);
+      console.log(`export interface ${interfaceName}ID {`);
+      
+      primaryKeys.forEach(key => {
+        const keyInfo = table.Struct[key] || {};
+        const keyType = keyInfo ? mapToTsType(keyInfo.type, keyInfo) : 'string';
+        console.log(`  ${key}: ${keyType};`);
+      });
+      
+      console.log(`}\n`);
+    }
+  }
+}
+
+/**
+ * Generate TypeScript types for available methods
+ */
+function generateMethodTypes(data) {
+  const funcs = data.func;
+  const pathName = data.Path ? data.Path.join('') : 'Unknown';
+  
+  funcs.forEach(func => {
+    const interfaceName = `I${pathName}${pascalCase(func.name)}`;
+    
+    console.log(`/**\n * ${func.name} method interface${func.static ? ' (static)' : ''}\n */`);
+    
+    // Generate request interface
+    console.log(`export interface ${interfaceName}Request {`);
+    
+    if (func.args && func.args.length > 0) {
+      func.args.forEach(arg => {
+        const optional = !arg.required ? '?' : '';
+        
+        // For foreign key references (fields ending with __)
+        let type = 'any';
+        if (arg.name.endsWith('__')) {
+          type = 'string'; // UUID reference
+        } else if (arg.name === 'erase' || arg.name.startsWith('is_') || arg.name.startsWith('has_')) {
+          type = 'boolean';
+        } else if (arg.name.includes('password')) {
+          type = 'string';
+        } else if (arg.name.endsWith('_id') || arg.name.includes('Id')) {
+          type = 'string';
+        } else if (arg.type) {
+          type = mapToTsType(arg.type, arg);
+        }
+        
+        const comment = arg.description ? ` // ${arg.description}` : '';
+        
+        console.log(`  ${arg.name}${optional}: ${type};${comment}`);
+      });
+    }
+    
+    console.log(`}\n`);
+    
+    // Generate response interface if return type is known
+    if (func.return_type) {
+      console.log(`export interface ${interfaceName}Response {`);
+      console.log(`  // Return type: ${func.return_type}`);
+      console.log(`  data: any; // Replace with specific structure if known`);
+      console.log(`}\n`);
+    }
+  });
+}
+
+/**
+ * Map API types to TypeScript types
+ */
+function mapToTsType(apiType, info = {}) {
+  if (!apiType) return 'any';
+  
+  // Convert to lowercase for case-insensitive matching
+  const type = apiType.toLowerCase();
+  
+  // Map SQL types to TypeScript types
+  const sqlTypeMap = {
+    // Numeric types
+    'int': 'number',
+    'integer': 'number',
+    'tinyint': 'number',
+    'smallint': 'number',
+    'mediumint': 'number',
+    'bigint': info.unsigned ? 'number' : 'number',
+    'decimal': 'number',
+    'float': 'number',
+    'double': 'number',
+    'number': 'number',
+    
+    // String types
+    'char': info.validator === 'uuid' ? 'string' : 'string',
+    'varchar': 'string',
+    'text': 'string',
+    'tinytext': 'string',
+    'mediumtext': 'string',
+    'longtext': 'string',
+    'string': 'string',
+    
+    // Date/time types
+    'date': 'string', // ISO date string
+    'datetime': 'string', // ISO datetime string
+    'timestamp': 'number',
+    'time': 'string',
+    'year': 'number',
+    
+    // Special types
+    'enum': info.values ? `'${info.values.join('\' | \'')}' | null` : 'string',
+    'set': info.values ? `string[]` : 'string[]',
+    'json': 'Record<string, any>',
+    'blob': 'string', // Base64 encoded
+    'binary': 'string', // Base64 encoded
+    'varbinary': 'string', // Base64 encoded
+    
+    // Boolean (often stored as TINYINT(1))
+    'bool': 'boolean',
+    'boolean': 'boolean',
+    
+    // Array and object types
+    'array': 'any[]',
+    'object': 'Record<string, any>',
+  };
+  
+  // Map validator types to more specific TypeScript types
+  const validatorMap = {
+    'uuid': 'string', // UUIDs
+    'email': 'string', // Email addresses
+    'url': 'string', // URLs
+    'phone': 'string', // Phone numbers
+    'password': 'string', // Passwords (hashed)
+    'login': 'string', // Login names
+    'language': 'string', // Language codes
+  };
+  
+  // Check for validators
+  if (info.validator && validatorMap[info.validator]) {
+    return validatorMap[info.validator];
+  }
+  
+  // Handle ENUM types with specific literal union type
+  if (type === 'enum' && info.values) {
+    return `'${info.values.join('\' | \'')}'${info.null !== false ? ' | null' : ''}`;
+  }
+  
+  // Handle SET types
+  if (type === 'set' && info.values) {
+    return 'string[]';
+  }
+  
+  // Foreign key references (usually CHAR(36) with UUID validator)
+  if (info.validator === 'uuid') {
+    return 'string'; // UUID string
+  }
+  
+  // Use the SQL type map for regular types
+  return sqlTypeMap[type] || 'any';
+}
+
+/**
+ * Convert a string to PascalCase (for interface names)
+ */
+function pascalCase(str) {
+  return str
+    .replace(/(?:^\w|[A-Z]|\b\w)/g, (letter, index) => {
+      return letter.toUpperCase();
+    })
+    .replace(/[\s-_]+/g, '');
+}
+
+/**
+ * Get example values for different types
+ */
+function getExampleValue(type) {
+  if (!type) return 'null';
+  
+  const examples = {
+    'bool': 'true',
+    'boolean': 'true',
+    'int': '123',
+    'integer': '123',
+    'float': '12.34',
+    'double': '12.34',
+    'number': '123',
+    'string': '"example"',
+    'text': '"example text"',
+    'json': '{ key: "value" }',
+    'array': '[]',
+    'object': '{}',
+    'date': '"2023-01-01"',
+    'datetime': '"2023-01-01T12:00:00Z"',
+    'timestamp': 'Date.now()',
+    'email': '"user@example.com"',
+    'url': '"https://example.com"',
+    'file': '"file_id"',
+  };
+  
+  return examples[type.toLowerCase()] || 'null';
 }
 
 /**
@@ -374,6 +724,7 @@ function printUsage() {
   console.log(`\n${colors.bright}Options:${colors.reset}`);
   console.log(`  --raw              Show raw JSON output without formatting`);
   console.log(`  --full             Show complete field lists and details without raw JSON`);
+  console.log(`  --ts, --types      Generate TypeScript type definitions`);
   console.log(`  --host <hostname>  Specify a custom API host (default: ${DEFAULT_API_HOST})`);
   console.log(`  --help, -h         Show this help message`);
   console.log(`\n${colors.bright}Examples:${colors.reset}`);
@@ -382,12 +733,14 @@ function printUsage() {
   console.log(`  npx @karpeleslab/klbfw-describe Misc/Debug:testUpload`);
   console.log(`  npx @karpeleslab/klbfw-describe --full User`);
   console.log(`  npx @karpeleslab/klbfw-describe --raw User`);
+  console.log(`  npx @karpeleslab/klbfw-describe --ts User`);
   console.log(`  npx @karpeleslab/klbfw-describe --host api.example.com User`);
 }
 
 // Parse command line arguments
 let rawOutput = false;
 let fullOutput = false;
+let typeScriptOutput = false;
 let apiPath = null;
 let host = DEFAULT_API_HOST;
 
@@ -399,6 +752,8 @@ for (let i = 0; i < args.length; i++) {
     rawOutput = true;
   } else if (arg === '--full') {
     fullOutput = true;
+  } else if (arg === '--ts' || arg === '--types') {
+    typeScriptOutput = true;
   } else if (arg === '--host' && i + 1 < args.length) {
     host = args[++i];
   } else if (arg === '--help' || arg === '-h') {
@@ -415,4 +770,4 @@ if (!apiPath) {
 }
 
 // Execute the API description
-describeApi(apiPath, { rawOutput, fullOutput, host });
+describeApi(apiPath, { rawOutput, fullOutput, typeScriptOutput, host });
