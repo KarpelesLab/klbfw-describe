@@ -525,12 +525,24 @@ function formatJsonResponse(jsonData, options = {}) {
     console.log(`${colors.bright}Access:${colors.reset} ${data.access}`);
   }
   
+  // Display description if available
+  if (data.description) {
+    console.log(`\n${colors.bright}Description:${colors.reset}`);
+    console.log(`${colors.dim}${data.description}${colors.reset}`);
+  }
+  
   // Display procedure info
   if (data.procedure) {
     // For procedures, show detailed information
     console.log(`\n${colors.bright}${colors.blue}Procedure Details:${colors.reset}`);
     console.log(`${colors.cyan}Name:${colors.reset} ${data.procedure.name}`);
     console.log(`${colors.cyan}Type:${colors.reset} ${data.procedure.static ? 'Static' : 'Instance'} Method`);
+    
+    // Display procedure description if available
+    if (data.procedure.description) {
+      console.log(`\n${colors.bright}Description:${colors.reset}`);
+      console.log(`${colors.dim}${data.procedure.description}${colors.reset}`);
+    }
     
     // Generate usage example
     if (data.Path) {
@@ -592,9 +604,20 @@ function formatJsonResponse(jsonData, options = {}) {
           argDesc += ` ${colors.red}*${colors.reset}`;
         }
         console.log(argDesc);
+        
+        // Show argument description if available
+        if (arg.description) {
+          console.log(`    ${colors.dim}${arg.description}${colors.reset}`);
+        }
       });
     } else {
       console.log(`\n${colors.dim}No arguments required${colors.reset}`);
+    }
+    
+    // Show return description if available
+    if (data.procedure.return_description) {
+      console.log(`\n${colors.bright}Returns:${colors.reset}`);
+      console.log(`  ${colors.dim}${data.procedure.return_description}${colors.reset}`);
     }
     
     return; // For procedures, we're done
@@ -632,6 +655,11 @@ function formatJsonResponse(jsonData, options = {}) {
           fieldDesc += ` ${colors.red}*${colors.reset}`;
         }
         console.log(fieldDesc);
+        
+        // Show field description if available
+        if (info.description) {
+          console.log(`    ${colors.dim}${info.description}${colors.reset}`);
+        }
       });
       
       if (!fullOutput && fields.length > 5) {
@@ -650,10 +678,15 @@ function formatJsonResponse(jsonData, options = {}) {
     data.func.forEach(func => {
       console.log(`  ${colors.green}${func.name}${colors.reset}${func.static ? ' (static)' : ''}`);
       
+      // Show method description if available
+      if (func.description) {
+        console.log(`    ${colors.dim}${func.description}${colors.reset}`);
+      }
+      
       if (func.args && func.args.length > 0) {
         // For full output, show each argument on its own line with details
         if (fullOutput) {
-          console.log(`    ${colors.dim}Arguments:${colors.reset}`);
+          console.log(`    ${colors.bright}Arguments:${colors.reset}`);
           func.args.forEach(arg => {
             let argDesc = `      ${colors.yellow}${arg.name}${colors.reset}`;
             if (arg.type) {
@@ -682,13 +715,12 @@ function formatJsonResponse(jsonData, options = {}) {
         }
       }
       
+      // Show return type and description if available
       if (func.return_type) {
         console.log(`    ${colors.dim}Returns: ${func.return_type}${colors.reset}`);
       }
-      
-      // Show description if available and using full output
-      if (fullOutput && func.description) {
-        console.log(`    ${colors.dim}Description: ${func.description}${colors.reset}`);
+      if (func.return_description) {
+        console.log(`    ${colors.dim}Return Description: ${func.return_description}${colors.reset}`);
       }
     });
   }
