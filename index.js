@@ -722,6 +722,9 @@ function formatJsonResponse(jsonData, options = {}) {
       if (func.return_description) {
         console.log(`    ${colors.dim}Return Description: ${func.return_description}${colors.reset}`);
       }
+      
+      // Add a couple of empty lines between methods for better readability
+      console.log('\n');
     });
   }
   
