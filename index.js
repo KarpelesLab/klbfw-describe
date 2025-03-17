@@ -13,7 +13,6 @@
  * 
  * Options:
  *   --raw          Show raw JSON output without formatting
- *   --full         Show complete field lists and details without raw JSON
  *   --ts, --types  Generate TypeScript type definitions
  *   --host <host>  Specify a custom API host (default: hub.atonline.com)
  * 
@@ -21,7 +20,6 @@
  *   npx @karpeleslab/klbfw-describe User
  *   npx @karpeleslab/klbfw-describe Misc/Debug
  *   npx @karpeleslab/klbfw-describe Misc/Debug:testUpload
- *   npx @karpeleslab/klbfw-describe --full User
  *   npx @karpeleslab/klbfw-describe --raw User
  *   npx @karpeleslab/klbfw-describe --ts User
  */
@@ -66,7 +64,7 @@ const colors = {
  * Perform an OPTIONS request to the specified API endpoint
  */
 function describeApi(apiPath, options = {}) {
-  const { rawOutput = false, fullOutput = false, typeScriptOutput = false, host = DEFAULT_API_HOST } = options;
+  const { rawOutput = false, typeScriptOutput = false, host = DEFAULT_API_HOST } = options;
   
   console.log(`\n${colors.bright}${colors.blue}Describing API endpoint:${colors.reset} ${colors.green}${apiPath}${colors.reset}`);
   console.log(`${colors.dim}Host: ${host}${colors.reset}\n`);
@@ -109,7 +107,7 @@ function describeApi(apiPath, options = {}) {
           generateTypeScriptDefinitions(jsonData);
         } else {
           // Formatted output
-          formatJsonResponse(jsonData, { fullOutput });
+          formatJsonResponse(jsonData);
         }
       } catch (e) {
         // If not JSON, output as text
@@ -571,7 +569,7 @@ function getExampleValue(type) {
  * Format JSON response in a more readable way
  */
 function formatJsonResponse(jsonData, options = {}) {
-  const { fullOutput = false } = options;
+  const { fullOutput = true } = options;
   if (!jsonData.data) {
     console.log(`${colors.red}Error: No API data found in response${colors.reset}`);
     return;
@@ -732,13 +730,12 @@ function formatJsonResponse(jsonData, options = {}) {
       console.log(`${colors.cyan}Primary Key:${colors.reset} ${data.table.Struct._primary.join(', ')}`);
     }
     
-    // Determine which fields to show
-    const fieldList = fullOutput ? fields : fields.slice(0, 5);
-    const headerText = fullOutput ? 'All Fields:' : 'Sample Fields:';
+    // Show all fields by default
+    const headerText = 'All Fields:';
     
-    if (fieldList.length > 0) {
+    if (fields.length > 0) {
       console.log(`\n${colors.bright}${headerText}${colors.reset}`);
-      fieldList.forEach(field => {
+      fields.forEach(field => {
         const info = data.table.Struct[field];
         let fieldDesc = `  ${colors.yellow}${field}${colors.reset}`;
         if (info.type) {
@@ -756,14 +753,6 @@ function formatJsonResponse(jsonData, options = {}) {
           console.log(`    ${colors.dim}${info.description}${colors.reset}`);
         }
       });
-      
-      if (!fullOutput && fields.length > 5) {
-        console.log(`  ${colors.dim}...and ${fields.length - 5} more fields${colors.reset}`);
-      }
-    }
-    
-    if (!fullOutput) {
-      console.log(`\n${colors.dim}Use --full for complete field listings or --raw for raw JSON${colors.reset}`);
     }
   }
   
@@ -779,35 +768,23 @@ function formatJsonResponse(jsonData, options = {}) {
       }
       
       if (func.args && func.args.length > 0) {
-        // For full output, show each argument on its own line with details
-        if (fullOutput) {
-          console.log(`    ${colors.bright}Arguments:${colors.reset}`);
-          func.args.forEach(arg => {
-            let argDesc = `      ${colors.yellow}${arg.name}${colors.reset}`;
-            if (arg.type) {
-              argDesc += ` (${arg.type})`;
-            }
-            if (arg.required) {
-              argDesc += ` ${colors.red}*${colors.reset}`;
-            }
-            console.log(argDesc);
-            
-            // Show description if available
-            if (arg.description) {
-              console.log(`        ${colors.dim}${arg.description}${colors.reset}`);
-            }
-          });
-        } else {
-          // For regular output, show compact inline list
-          const argList = func.args.map(arg => {
-            let str = arg.name;
-            if (arg.required) str += '*';
-            if (arg.type) str += `: ${arg.type}`;
-            return str;
-          }).join(', ');
+        // Always show detailed arguments
+        console.log(`    ${colors.bright}Arguments:${colors.reset}`);
+        func.args.forEach(arg => {
+          let argDesc = `      ${colors.yellow}${arg.name}${colors.reset}`;
+          if (arg.type) {
+            argDesc += ` (${arg.type})`;
+          }
+          if (arg.required) {
+            argDesc += ` ${colors.red}*${colors.reset}`;
+          }
+          console.log(argDesc);
           
-          console.log(`    ${colors.dim}Arguments: ${argList}${colors.reset}`);
-        }
+          // Show description if available
+          if (arg.description) {
+            console.log(`        ${colors.dim}${arg.description}${colors.reset}`);
+          }
+        });
       }
       
       // Show return type and description if available
@@ -957,7 +934,6 @@ function printUsage() {
   console.log(`${colors.bright}Usage:${colors.reset} npx @karpeleslab/klbfw-describe [options] <api-path>`);
   console.log(`\n${colors.bright}Options:${colors.reset}`);
   console.log(`  --raw              Show raw JSON output without formatting`);
-  console.log(`  --full             Show complete field lists and details without raw JSON`);
   console.log(`  --ts, --types      Generate TypeScript type definitions`);
   console.log(`  --host <hostname>  Specify a custom API host (default: ${DEFAULT_API_HOST})`);
   console.log(`  --help, -h         Show this help message`);
@@ -965,7 +941,6 @@ function printUsage() {
   console.log(`  npx @karpeleslab/klbfw-describe User`);
   console.log(`  npx @karpeleslab/klbfw-describe Misc/Debug`);
   console.log(`  npx @karpeleslab/klbfw-describe Misc/Debug:testUpload`);
-  console.log(`  npx @karpeleslab/klbfw-describe --full User`);
   console.log(`  npx @karpeleslab/klbfw-describe --raw User`);
   console.log(`  npx @karpeleslab/klbfw-describe --ts User`);
   console.log(`  npx @karpeleslab/klbfw-describe --host api.example.com User`);
@@ -973,7 +948,6 @@ function printUsage() {
 
 // Parse command line arguments
 let rawOutput = false;
-let fullOutput = false;
 let typeScriptOutput = false;
 let apiPath = null;
 let host = DEFAULT_API_HOST;
@@ -984,8 +958,6 @@ for (let i = 0; i < args.length; i++) {
   
   if (arg === '--raw') {
     rawOutput = true;
-  } else if (arg === '--full') {
-    fullOutput = true;
   } else if (arg === '--ts' || arg === '--types') {
     typeScriptOutput = true;
   } else if (arg === '--host' && i + 1 < args.length) {
@@ -1007,4 +979,4 @@ if (!apiPath) {
 }
 
 // Execute the API description
-describeApi(apiPath, { rawOutput, fullOutput, typeScriptOutput, host });
+describeApi(apiPath, { rawOutput, typeScriptOutput, host });
