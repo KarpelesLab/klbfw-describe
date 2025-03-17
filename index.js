@@ -149,6 +149,62 @@ function generateTypeScriptDefinitions(jsonData) {
   
   console.log(`\n${colors.bright}${colors.blue}TypeScript definitions for:${colors.reset} ${colors.green}${apiPath}${colors.reset}\n`);
   
+  // Check if we need to include KlbDateTime definition
+  let hasDateTimeFields = false;
+  
+  // Check table structure for datetime/timestamp fields
+  if (data.table && data.table.Struct) {
+    const fields = Object.keys(data.table.Struct).filter(key => !key.startsWith('_'));
+    for (const field of fields) {
+      const info = data.table.Struct[field];
+      if (info.type && (info.type.toLowerCase() === 'datetime' || info.type.toLowerCase() === 'timestamp')) {
+        hasDateTimeFields = true;
+        break;
+      }
+    }
+  }
+  
+  // Check procedure args for datetime/timestamp fields
+  if (!hasDateTimeFields && data.procedure && data.procedure.args) {
+    for (const arg of data.procedure.args) {
+      if (arg.type && (arg.type.toLowerCase() === 'datetime' || arg.type.toLowerCase() === 'timestamp')) {
+        hasDateTimeFields = true;
+        break;
+      }
+    }
+  }
+  
+  // Check method args for datetime/timestamp fields
+  if (!hasDateTimeFields && data.func) {
+    for (const func of data.func) {
+      if (func.args) {
+        for (const arg of func.args) {
+          if (arg.type && (arg.type.toLowerCase() === 'datetime' || arg.type.toLowerCase() === 'timestamp')) {
+            hasDateTimeFields = true;
+            break;
+          }
+        }
+      }
+      if (hasDateTimeFields) break;
+    }
+  }
+  
+  // Include KlbDateTime definition if needed
+  if (hasDateTimeFields) {
+    console.log(`/**
+ * KLB DateTime object structure
+ */
+export interface KlbDateTime {
+  unix: number;    // Unix timestamp (seconds)
+  us: number;      // Microseconds part
+  iso: string;     // ISO formatted date string
+  tz: string;      // Timezone identifier
+  full: string;    // Full timestamp as string (seconds + microseconds)
+  unixms: string;  // Unix timestamp with milliseconds as string
+}
+`);
+  }
+  
   // Handle procedures (methods)
   if (data.procedure) {
     generateProcedureTypes(data);
@@ -413,8 +469,8 @@ function mapToTsType(apiType, info = {}) {
     
     // Date/time types
     'date': 'string', // ISO date string
-    'datetime': 'string', // ISO datetime string
-    'timestamp': 'number',
+    'datetime': 'KlbDateTime', // KlbDateTime object
+    'timestamp': 'KlbDateTime', // KlbDateTime object
     'time': 'string',
     'year': 'number',
     
@@ -501,8 +557,8 @@ function getExampleValue(type) {
     'array': '[]',
     'object': '{}',
     'date': '"2023-01-01"',
-    'datetime': '"2023-01-01T12:00:00Z"',
-    'timestamp': 'Date.now()',
+    'datetime': '{ unix: 1742172348, us: 311592, iso: "2025-03-17 09:45:48.311592", tz: "Asia/Tokyo", full: "1742172348311592", unixms: "1742172348311" }',
+    'timestamp': '{ unix: 1742172348, us: 311592, iso: "2025-03-17 09:45:48.311592", tz: "Asia/Tokyo", full: "1742172348311592", unixms: "1742172348311" }',
     'email': '"user@example.com"',
     'url': '"https://example.com"',
     'file': '"file_id"',
