@@ -27,12 +27,16 @@ npx @karpeleslab/klbfw-describe [options] <api-path>
 
 - `--raw`: Show raw JSON output without formatting
 - `--full`: Show complete field lists and details without raw JSON
-- `--host <hostname>`: Specify a custom API host (default: hub.atonline.com)
+- `--ts`, `--types`: Generate TypeScript type definitions
+- `--host <hostname>`: Specify a custom API host (default: ws.atonline.com)
 - `--help`, `-h`: Show help message
 
 ### Examples
 
 ```bash
+# Show all available API objects
+npx @karpeleslab/klbfw-describe
+
 # Describe a top-level endpoint
 npx @karpeleslab/klbfw-describe User
 
@@ -48,6 +52,9 @@ npx @karpeleslab/klbfw-describe --full User
 # Get raw JSON output
 npx @karpeleslab/klbfw-describe --raw User
 
+# Generate TypeScript definitions
+npx @karpeleslab/klbfw-describe --ts User
+
 # Use a custom API host
 npx @karpeleslab/klbfw-describe --host api.example.com User
 ```
@@ -55,14 +62,16 @@ npx @karpeleslab/klbfw-describe --host api.example.com User
 ## Features
 
 - Colorized, formatted output for easy reading
+- Lists all available API objects when run without parameters
 - Shows allowed HTTP methods with color-coding (GET, POST, etc.)
 - Displays API endpoint type (Procedure, Resource, or Collection)
 - Shows code examples for calling procedures
 - Lists arguments with their types and required status
-- Three output modes:
+- Multiple output modes:
   - Default: Shows a condensed view with sample fields
   - `--full`: Shows complete field listings and detailed information
   - `--raw`: Shows the raw JSON response for advanced needs
+  - `--ts`: Generates TypeScript type definitions for API objects
 - Displays sample or complete fields for resources
 - Groups sub-endpoints alphabetically for easy reference
 

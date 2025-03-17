@@ -30,7 +30,7 @@ const https = require('https');
 const url = require('url');
 
 // Default API host
-const DEFAULT_API_HOST = 'hub.atonline.com';
+const DEFAULT_API_HOST = 'ws.atonline.com';
 const API_PREFIX = '/_rest/';
 
 // ANSI colors for terminal output
@@ -877,6 +877,80 @@ function formatJsonResponse(jsonData, options = {}) {
 }
 
 /**
+ * Retrieve and display available API objects from the root endpoint
+ */
+function describeRootObjects(host = DEFAULT_API_HOST) {
+  const reqUrl = url.parse(`https://${host}${API_PREFIX}`);
+  
+  const reqOptions = {
+    hostname: reqUrl.hostname,
+    path: reqUrl.path,
+    method: 'OPTIONS',
+    headers: {
+      'Accept': 'application/json'
+    }
+  };
+  
+  const req = https.request(reqOptions, (res) => {
+    let data = '';
+    
+    res.on('data', (chunk) => {
+      data += chunk;
+    });
+    
+    res.on('end', () => {
+      if (res.statusCode !== 200) {
+        console.log(`${colors.bright}Status:${colors.reset} ${colors.red}${res.statusCode}${colors.reset}`);
+        console.log(`${colors.red}Error: Unable to fetch root API information${colors.reset}`);
+        return;
+      }
+      
+      try {
+        const jsonData = JSON.parse(data);
+        
+        if (jsonData.data && jsonData.data.prefix) {
+          console.log(`\n${colors.bright}${colors.blue}Available API Objects:${colors.reset}\n`);
+          
+          // Group by first letter to organize large lists
+          const groups = {};
+          jsonData.data.prefix.forEach(prefix => {
+            const firstChar = prefix.name.charAt(0).toUpperCase();
+            if (!groups[firstChar]) groups[firstChar] = [];
+            groups[firstChar].push(prefix);
+          });
+          
+          // Display grouped endpoints
+          Object.keys(groups).sort().forEach(letter => {
+            console.log(`  ${colors.bright}${letter}${colors.reset}`);
+            
+            // Sort endpoints within each group
+            const sortedEndpoints = groups[letter].sort((a, b) => a.name.localeCompare(b.name));
+            
+            sortedEndpoints.forEach(endpoint => {
+              console.log(`    ${colors.green}${endpoint.name}${colors.reset}${endpoint.description ? ` - ${colors.dim}${endpoint.description}${colors.reset}` : ''}`);
+            });
+            console.log(''); // Add space between groups
+          });
+          
+          console.log(`${colors.dim}Run with a specific API path to get more details about an object.${colors.reset}`);
+          console.log(`${colors.dim}Example: npx @karpeleslab/klbfw-describe User${colors.reset}`);
+        } else {
+          console.log(`${colors.red}Error: Could not retrieve API object list.${colors.reset}`);
+        }
+      } catch (e) {
+        console.log(`${colors.red}Error parsing API response:${colors.reset} ${e.message}`);
+      }
+    });
+  });
+  
+  req.on('error', (e) => {
+    console.error(`${colors.red}Error:${colors.reset} ${e.message}`);
+  });
+  
+  req.end();
+}
+
+/**
  * Print usage information
  */
 function printUsage() {
@@ -926,7 +1000,10 @@ for (let i = 0; i < args.length; i++) {
 
 if (!apiPath) {
   printUsage();
-  process.exit(1);
+  console.log('\n' + colors.bright + 'Retrieving available API objects...' + colors.reset);
+  // Get root objects with OPTIONS on /_rest/
+  describeRootObjects(host);
+  return; // Return here to avoid calling describeApi without a path
 }
 
 // Execute the API description
