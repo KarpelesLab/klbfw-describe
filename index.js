@@ -352,10 +352,47 @@ function formatObject(obj, depth = 0, maxDepth = 2) {
     return;
   }
   
-  keys.forEach((key, i) => {
+  // Preprocessing: collect translatable text fields
+  const textFields = {};
+  
+  // First pass: identify translatable text fields (_Text__)
+  keys.forEach(key => {
+    if (key.endsWith('_Text__') && typeof obj[key] === 'string') {
+      const baseFieldName = key.slice(0, -7); // Remove _Text__ suffix
+      textFields[baseFieldName] = true;
+    }
+  });
+  
+  // Create a sorted list of keys that puts related fields together
+  const sortedKeys = [...keys].sort((a, b) => {
+    // If one is a translatable field id and the other is the corresponding text field
+    if (a.endsWith('_Text__') && b === a.slice(0, -7)) return -1;
+    if (b.endsWith('_Text__') && a === b.slice(0, -7)) return 1;
+    // Normal alphabetical sort
+    return a.localeCompare(b);
+  });
+  
+  // Second pass: display fields with special handling for translatable fields
+  sortedKeys.forEach((key, i) => {
     const value = obj[key];
     
-    if (typeof value === 'object' && value !== null) {
+    // Skip auto-generated text fields (we'll display them with their ID field)
+    if (textFields[key]) {
+      // This is an auto-generated text field, we'll show it along with its ID
+      return;
+    }
+    
+    if (key.endsWith('_Text__') && typeof value === 'string') {
+      // This is a translatable text ID field, show the ID and also the text value
+      const baseFieldName = key.slice(0, -7); // Remove _Text__ suffix
+      const textValue = obj[baseFieldName];
+      
+      console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"${key}":${colors.reset} ${colors.green}"${value}"${colors.reset} ${colors.dim}// Translatable ID${colors.reset}`);
+      
+      if (textValue !== undefined) {
+        console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"${baseFieldName}":${colors.reset} ${colors.green}"${textValue}"${colors.reset} ${colors.dim}// Translated text${colors.reset}`);
+      }
+    } else if (typeof value === 'object' && value !== null) {
       console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"${key}":${colors.reset}`);
       formatObject(value, depth + 1, maxDepth);
     } else if (typeof value === 'string') {
@@ -370,8 +407,13 @@ function formatObject(obj, depth = 0, maxDepth = 2) {
       console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"${key}":${colors.reset} ${value}`);
     }
     
-    if (i < keys.length - 1) {
-      console.log(`${' '.repeat((depth + 1) * 2)},`);
+    // Add comma after all fields except the last one
+    if (i < sortedKeys.length - 1) {
+      const nextKey = sortedKeys[i + 1];
+      // Don't add comma if the next field is an auto-generated text field that corresponds to the current field
+      if (!(textFields[nextKey] && nextKey === key.slice(0, -7))) {
+        console.log(`${' '.repeat((depth + 1) * 2)},`);
+      }
     }
   });
   
@@ -555,6 +597,15 @@ function generateResourceTypes(data) {
   if (table.Struct) {
     const fields = Object.keys(table.Struct).filter(key => !key.startsWith('_'));
     
+    // Collect translatable text fields
+    const textFields = {};
+    fields.forEach(field => {
+      if (field.endsWith('_Text__')) {
+        const baseFieldName = field.slice(0, -7); // Remove _Text__ suffix
+        textFields[baseFieldName] = true;
+      }
+    });
+    
     fields.forEach(field => {
       const info = table.Struct[field];
       const optional = info.null !== false ? '?' : '';
@@ -569,6 +620,12 @@ function generateResourceTypes(data) {
       }
       
       console.log(`  ${field}${optional}: ${type};${comment}`);
+      
+      // Add generated text field for fields ending with _Text__
+      if (field.endsWith('_Text__')) {
+        const baseFieldName = field.slice(0, -7); // Remove _Text__ suffix
+        console.log(`  ${baseFieldName}?: string; // Auto-generated translated text field`);
+      }
     });
   }
   
@@ -979,6 +1036,15 @@ function formatJsonResponse(jsonData, options = {}) {
     const headerText = 'All Fields:';
     
     if (fields.length > 0) {
+      // Collect translatable text fields
+      const textFields = {};
+      fields.forEach(field => {
+        if (field.endsWith('_Text__')) {
+          const baseFieldName = field.slice(0, -7); // Remove _Text__ suffix
+          textFields[baseFieldName] = true;
+        }
+      });
+      
       console.log(`\n${colors.bright}${headerText}${colors.reset}`);
       fields.forEach(field => {
         const info = data.table.Struct[field];
@@ -991,11 +1057,25 @@ function formatJsonResponse(jsonData, options = {}) {
         if (info.null === false) {
           fieldDesc += ` ${colors.red}*${colors.reset}`;
         }
+        
+        // Add note for translatable fields
+        if (field.endsWith('_Text__')) {
+          fieldDesc += ` ${colors.dim}(translatable text ID)${colors.reset}`;
+        } else if (textFields[field]) {
+          fieldDesc += ` ${colors.dim}(auto-generated translated text)${colors.reset}`;
+        }
+        
         console.log(fieldDesc);
         
         // Show field description if available
         if (info.description) {
           console.log(`    ${colors.dim}${info.description}${colors.reset}`);
+        }
+        
+        // For translatable fields, add a note about the auto-generated text field
+        if (field.endsWith('_Text__')) {
+          const baseFieldName = field.slice(0, -7); // Remove _Text__ suffix
+          console.log(`    ${colors.dim}Translatable text ID. The translated text will be available in the '${baseFieldName}' field.${colors.reset}`);
         }
       });
     }
