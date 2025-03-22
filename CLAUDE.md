@@ -3,7 +3,7 @@
 ## Commands
 - **Install**: `npm install`
 - **Run locally**: `node index.js <api-path>`
-- **Run with options**: `node index.js --raw <api-path>`
+- **Run with options**: `node index.js --raw <api-path>` or `node index.js --get <api-path>`
 - **Test**: `npm test` (Note: no tests are currently implemented)
 - **Package**: `npm pack`
 - **Publish**: `npm publish`

@@ -27,6 +27,7 @@ npx @karpeleslab/klbfw-describe [options] <api-path>
 
 - `--raw`: Show raw JSON output without formatting
 - `--ts`, `--types`: Generate TypeScript type definitions
+- `--get`: Perform a GET request instead of OPTIONS
 - `--help`, `-h`: Show help message
 
 ### Examples
@@ -50,6 +51,9 @@ npx @karpeleslab/klbfw-describe --raw User
 # Generate TypeScript definitions
 npx @karpeleslab/klbfw-describe --ts User
 
+# Get a specific resource
+npx @karpeleslab/klbfw-describe --get User/12345
+
 ```
 
 ## Features
@@ -64,6 +68,7 @@ npx @karpeleslab/klbfw-describe --ts User
   - Default: Shows detailed information with complete field listings
   - `--raw`: Shows the raw JSON response for advanced needs
   - `--ts`: Generates TypeScript type definitions for API objects
+  - `--get`: Fetches actual resources instead of metadata
 - Displays sample or complete fields for resources
 - Groups sub-endpoints alphabetically for easy reference
 

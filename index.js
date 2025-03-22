@@ -14,6 +14,7 @@
  * Options:
  *   --raw          Show raw JSON output without formatting
  *   --ts, --types  Generate TypeScript type definitions
+ *   --get          Perform a GET request instead of OPTIONS
  * 
  * Examples:
  *   npx @karpeleslab/klbfw-describe User
@@ -21,6 +22,7 @@
  *   npx @karpeleslab/klbfw-describe Misc/Debug:testUpload
  *   npx @karpeleslab/klbfw-describe --raw User
  *   npx @karpeleslab/klbfw-describe --ts User
+ *   npx @karpeleslab/klbfw-describe --get User/ce8b57ca-8961-49c5-863a-b79ab3e1e4a0
  */
 
 const https = require('https');
@@ -130,6 +132,250 @@ function formatHeaders(headers) {
   return Object.keys(headers).map(key => {
     return `\n  ${colors.cyan}${key}:${colors.reset} ${headers[key]}`;
   }).join('');
+}
+
+/**
+ * Perform a GET request to the specified API endpoint
+ */
+function getApiResource(apiPath, options = {}) {
+  const { rawOutput = false } = options;
+  
+  console.log(`\n${colors.bright}${colors.blue}Retrieving API resource:${colors.reset} ${colors.green}${apiPath}${colors.reset}`);
+  console.log(`${colors.dim}Host: ${DEFAULT_API_HOST}${colors.reset}\n`);
+  
+  const reqUrl = url.parse(`https://${DEFAULT_API_HOST}${API_PREFIX}${apiPath}`);
+  
+  const reqOptions = {
+    hostname: reqUrl.hostname,
+    path: reqUrl.path,
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json'
+    }
+  };
+  
+  const req = https.request(reqOptions, (res) => {
+    let data = '';
+    
+    res.on('data', (chunk) => {
+      data += chunk;
+    });
+    
+    res.on('end', () => {
+      console.log(`${colors.bright}Status:${colors.reset} ${res.statusCode === 200 ? colors.green : colors.red}${res.statusCode}${colors.reset}`);
+      
+      if (res.statusCode !== 200) {
+        console.log(`${colors.red}Error: Unable to fetch resource${colors.reset}`);
+        try {
+          // Try to parse error response as JSON
+          const errorData = JSON.parse(data);
+          if (errorData.error) {
+            console.log(`${colors.red}Error message:${colors.reset} ${errorData.error}`);
+          }
+        } catch (e) {
+          // If not JSON, output as text
+          console.log(`${colors.red}Response:${colors.reset} ${data}`);
+        }
+        return;
+      }
+      
+      try {
+        // Try to parse as JSON first
+        const jsonData = JSON.parse(data);
+        
+        if (rawOutput) {
+          // Raw JSON output without formatting
+          console.log('\n' + colors.bright + 'Response:' + colors.reset);
+          console.log(JSON.stringify(jsonData, null, 2));
+        } else {
+          // Format the JSON output for display
+          formatGetResponse(jsonData);
+        }
+      } catch (e) {
+        // If not JSON, output as text
+        console.log(`\n${colors.bright}Response (Text):${colors.reset}`);
+        console.log(data);
+      }
+    });
+  });
+  
+  req.on('error', (e) => {
+    console.error(`${colors.red}Error:${colors.reset} ${e.message}`);
+  });
+  
+  req.end();
+}
+
+/**
+ * Format a GET response in a more readable way
+ */
+function formatGetResponse(jsonData) {
+  // Check for standard KLB response structure
+  if (jsonData.data !== undefined) {
+    // Detect if it's a collection (array) or a single object
+    const data = jsonData.data;
+    
+    if (Array.isArray(data)) {
+      console.log(`\n${colors.bright}${colors.blue}Collection Response:${colors.reset} ${data.length} items\n`);
+      
+      // For large collections, show summary information
+      if (data.length > 10) {
+        console.log(`${colors.dim}Showing first 10 items of ${data.length}${colors.reset}\n`);
+        
+        // Show first 10 items
+        data.slice(0, 10).forEach((item, index) => {
+          console.log(`${colors.bright}${colors.yellow}Item ${index + 1}:${colors.reset}`);
+          formatObject(item);
+          console.log(''); // Add space between items
+        });
+      } else {
+        // Show all items for smaller collections
+        data.forEach((item, index) => {
+          console.log(`${colors.bright}${colors.yellow}Item ${index + 1}:${colors.reset}`);
+          formatObject(item);
+          console.log(''); // Add space between items
+        });
+      }
+    } else if (typeof data === 'object' && data !== null) {
+      console.log(`\n${colors.bright}${colors.blue}Object Response:${colors.reset}\n`);
+      formatObject(data);
+    } else {
+      // Simple scalar value
+      console.log(`\n${colors.bright}${colors.blue}Value Response:${colors.reset} ${data}\n`);
+    }
+    
+    // Show metadata if present
+    if (jsonData.total !== undefined) {
+      console.log(`${colors.bright}Total Records:${colors.reset} ${jsonData.total}`);
+    }
+    if (jsonData.count !== undefined) {
+      console.log(`${colors.bright}Record Count:${colors.reset} ${jsonData.count}`);
+    }
+    if (jsonData.page !== undefined) {
+      console.log(`${colors.bright}Page:${colors.reset} ${jsonData.page}`);
+    }
+  } else {
+    // Non-standard response structure, just pretty-print
+    console.log(`\n${colors.bright}${colors.blue}Response:${colors.reset}\n`);
+    formatObject(jsonData);
+  }
+}
+
+/**
+ * Format an object for display with color coding
+ */
+function formatObject(obj, depth = 0, maxDepth = 2) {
+  if (obj === null) {
+    console.log(`${' '.repeat(depth * 2)}${colors.dim}null${colors.reset}`);
+    return;
+  }
+  
+  if (typeof obj !== 'object') {
+    // Handle primitive types
+    if (typeof obj === 'string') {
+      console.log(`${' '.repeat(depth * 2)}${colors.green}"${obj}"${colors.reset}`);
+    } else if (typeof obj === 'number') {
+      console.log(`${' '.repeat(depth * 2)}${colors.yellow}${obj}${colors.reset}`);
+    } else if (typeof obj === 'boolean') {
+      console.log(`${' '.repeat(depth * 2)}${colors.magenta}${obj}${colors.reset}`);
+    } else {
+      console.log(`${' '.repeat(depth * 2)}${obj}`);
+    }
+    return;
+  }
+  
+  // Handle arrays
+  if (Array.isArray(obj)) {
+    if (obj.length === 0) {
+      console.log(`${' '.repeat(depth * 2)}${colors.dim}[]${colors.reset}`);
+      return;
+    }
+    
+    if (depth >= maxDepth) {
+      console.log(`${' '.repeat(depth * 2)}${colors.dim}[Array(${obj.length})]${colors.reset}`);
+      return;
+    }
+    
+    // For simple arrays with primitive values, show inline
+    const allPrimitive = obj.every(item => typeof item !== 'object' || item === null);
+    if (allPrimitive && obj.length <= 5) {
+      const values = obj.map(item => {
+        if (item === null) return `${colors.dim}null${colors.reset}`;
+        if (typeof item === 'string') return `${colors.green}"${item}"${colors.reset}`;
+        if (typeof item === 'number') return `${colors.yellow}${item}${colors.reset}`;
+        if (typeof item === 'boolean') return `${colors.magenta}${item}${colors.reset}`;
+        return item;
+      }).join(', ');
+      
+      console.log(`${' '.repeat(depth * 2)}[${values}]`);
+      return;
+    }
+    
+    // For more complex or larger arrays, show vertically
+    console.log(`${' '.repeat(depth * 2)}[`);
+    
+    // Limit large arrays in output
+    const displayItems = obj.length > 5 ? obj.slice(0, 5) : obj;
+    displayItems.forEach((item, i) => {
+      formatObject(item, depth + 1, maxDepth);
+      if (i < displayItems.length - 1) {
+        console.log(`${' '.repeat((depth + 1) * 2)},`);
+      }
+    });
+    
+    if (obj.length > 5) {
+      console.log(`${' '.repeat((depth + 1) * 2)}${colors.dim}... ${obj.length - 5} more items${colors.reset}`);
+    }
+    
+    console.log(`${' '.repeat(depth * 2)}]`);
+    return;
+  }
+  
+  // Handle objects
+  const keys = Object.keys(obj);
+  if (keys.length === 0) {
+    console.log(`${' '.repeat(depth * 2)}${colors.dim}{}${colors.reset}`);
+    return;
+  }
+  
+  if (depth >= maxDepth) {
+    console.log(`${' '.repeat(depth * 2)}${colors.dim}{Object with ${keys.length} properties}${colors.reset}`);
+    return;
+  }
+  
+  console.log(`${' '.repeat(depth * 2)}{`);
+  
+  // Special handling for KlbDateTime objects
+  if (obj.unix !== undefined && obj.iso !== undefined && obj.tz !== undefined) {
+    console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"iso":${colors.reset} ${colors.green}"${obj.iso}"${colors.reset}`);
+    console.log(`${' '.repeat(depth * 2)}}`);
+    return;
+  }
+  
+  keys.forEach((key, i) => {
+    const value = obj[key];
+    
+    if (typeof value === 'object' && value !== null) {
+      console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"${key}":${colors.reset}`);
+      formatObject(value, depth + 1, maxDepth);
+    } else if (typeof value === 'string') {
+      console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"${key}":${colors.reset} ${colors.green}"${value}"${colors.reset}`);
+    } else if (typeof value === 'number') {
+      console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"${key}":${colors.reset} ${colors.yellow}${value}${colors.reset}`);
+    } else if (typeof value === 'boolean') {
+      console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"${key}":${colors.reset} ${colors.magenta}${value}${colors.reset}`);
+    } else if (value === null) {
+      console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"${key}":${colors.reset} ${colors.dim}null${colors.reset}`);
+    } else {
+      console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"${key}":${colors.reset} ${value}`);
+    }
+    
+    if (i < keys.length - 1) {
+      console.log(`${' '.repeat((depth + 1) * 2)},`);
+    }
+  });
+  
+  console.log(`${' '.repeat(depth * 2)}}`);
 }
 
 /**
@@ -934,6 +1180,7 @@ function printUsage() {
   console.log(`\n${colors.bright}Options:${colors.reset}`);
   console.log(`  --raw              Show raw JSON output without formatting`);
   console.log(`  --ts, --types      Generate TypeScript type definitions`);
+  console.log(`  --get              Perform a GET request instead of OPTIONS`);
   console.log(`  --help, -h         Show this help message`);
   console.log(`\n${colors.bright}Examples:${colors.reset}`);
   console.log(`  npx @karpeleslab/klbfw-describe User`);
@@ -941,11 +1188,13 @@ function printUsage() {
   console.log(`  npx @karpeleslab/klbfw-describe Misc/Debug:testUpload`);
   console.log(`  npx @karpeleslab/klbfw-describe --raw User`);
   console.log(`  npx @karpeleslab/klbfw-describe --ts User`);
+  console.log(`  npx @karpeleslab/klbfw-describe --get User/12345`);
 }
 
 // Parse command line arguments
 let rawOutput = false;
 let typeScriptOutput = false;
+let getRequest = false;
 let apiPath = null;
 
 const args = process.argv.slice(2);
@@ -956,6 +1205,8 @@ for (let i = 0; i < args.length; i++) {
     rawOutput = true;
   } else if (arg === '--ts' || arg === '--types') {
     typeScriptOutput = true;
+  } else if (arg === '--get') {
+    getRequest = true;
   } else if (arg === '--help' || arg === '-h') {
     printUsage();
     process.exit(0);
@@ -972,5 +1223,10 @@ if (!apiPath) {
   return; // Return here to avoid calling describeApi without a path
 }
 
-// Execute the API description
-describeApi(apiPath, { rawOutput, typeScriptOutput });
+if (getRequest) {
+  // Execute a GET request
+  getApiResource(apiPath, { rawOutput });
+} else {
+  // Execute the API description
+  describeApi(apiPath, { rawOutput, typeScriptOutput });
+};
