@@ -14,7 +14,6 @@
  * Options:
  *   --raw          Show raw JSON output without formatting
  *   --ts, --types  Generate TypeScript type definitions
- *   --host <host>  Specify a custom API host (default: hub.atonline.com)
  * 
  * Examples:
  *   npx @karpeleslab/klbfw-describe User
@@ -64,12 +63,12 @@ const colors = {
  * Perform an OPTIONS request to the specified API endpoint
  */
 function describeApi(apiPath, options = {}) {
-  const { rawOutput = false, typeScriptOutput = false, host = DEFAULT_API_HOST } = options;
+  const { rawOutput = false, typeScriptOutput = false } = options;
   
   console.log(`\n${colors.bright}${colors.blue}Describing API endpoint:${colors.reset} ${colors.green}${apiPath}${colors.reset}`);
-  console.log(`${colors.dim}Host: ${host}${colors.reset}\n`);
+  console.log(`${colors.dim}Host: ${DEFAULT_API_HOST}${colors.reset}\n`);
   
-  const reqUrl = url.parse(`https://${host}${API_PREFIX}${apiPath}`);
+  const reqUrl = url.parse(`https://${DEFAULT_API_HOST}${API_PREFIX}${apiPath}`);
   
   const reqOptions = {
     hostname: reqUrl.hostname,
@@ -856,8 +855,8 @@ function formatJsonResponse(jsonData, options = {}) {
 /**
  * Retrieve and display available API objects from the root endpoint
  */
-function describeRootObjects(host = DEFAULT_API_HOST) {
-  const reqUrl = url.parse(`https://${host}${API_PREFIX}`);
+function describeRootObjects() {
+  const reqUrl = url.parse(`https://${DEFAULT_API_HOST}${API_PREFIX}`);
   
   const reqOptions = {
     hostname: reqUrl.hostname,
@@ -935,7 +934,6 @@ function printUsage() {
   console.log(`\n${colors.bright}Options:${colors.reset}`);
   console.log(`  --raw              Show raw JSON output without formatting`);
   console.log(`  --ts, --types      Generate TypeScript type definitions`);
-  console.log(`  --host <hostname>  Specify a custom API host (default: ${DEFAULT_API_HOST})`);
   console.log(`  --help, -h         Show this help message`);
   console.log(`\n${colors.bright}Examples:${colors.reset}`);
   console.log(`  npx @karpeleslab/klbfw-describe User`);
@@ -943,14 +941,12 @@ function printUsage() {
   console.log(`  npx @karpeleslab/klbfw-describe Misc/Debug:testUpload`);
   console.log(`  npx @karpeleslab/klbfw-describe --raw User`);
   console.log(`  npx @karpeleslab/klbfw-describe --ts User`);
-  console.log(`  npx @karpeleslab/klbfw-describe --host api.example.com User`);
 }
 
 // Parse command line arguments
 let rawOutput = false;
 let typeScriptOutput = false;
 let apiPath = null;
-let host = DEFAULT_API_HOST;
 
 const args = process.argv.slice(2);
 for (let i = 0; i < args.length; i++) {
@@ -960,8 +956,6 @@ for (let i = 0; i < args.length; i++) {
     rawOutput = true;
   } else if (arg === '--ts' || arg === '--types') {
     typeScriptOutput = true;
-  } else if (arg === '--host' && i + 1 < args.length) {
-    host = args[++i];
   } else if (arg === '--help' || arg === '-h') {
     printUsage();
     process.exit(0);
@@ -974,9 +968,9 @@ if (!apiPath) {
   printUsage();
   console.log('\n' + colors.bright + 'Retrieving available API objects...' + colors.reset);
   // Get root objects with OPTIONS on /_rest/
-  describeRootObjects(host);
+  describeRootObjects();
   return; // Return here to avoid calling describeApi without a path
 }
 
 // Execute the API description
-describeApi(apiPath, { rawOutput, typeScriptOutput, host });
+describeApi(apiPath, { rawOutput, typeScriptOutput });
