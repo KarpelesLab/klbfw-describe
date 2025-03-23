@@ -16,11 +16,9 @@ export async function startMcpServer() {
   // Add describe tool with explicit schema
   server.tool(
     "describe",
-    "Describe an API endpoint",
+    "Describe an API endpoint by its path with formatted output",
     {
-      apiPath: z.string().min(1).describe("The API endpoint path to describe"),
-      raw: z.boolean().optional().default(false).describe("Whether to show raw JSON output"),
-      typescriptOutput: z.boolean().optional().default(false).describe("Whether to generate TypeScript definitions")
+      apiPath: z.string().min(1).describe("The API endpoint path to describe")
     },
     async (params) => {
       let output = '';
@@ -29,8 +27,58 @@ export async function startMcpServer() {
       };
       
       await describeApi(params.apiPath, {
-        rawOutput: params.raw,
-        typeScriptOutput: params.typescriptOutput,
+        rawOutput: false,
+        typeScriptOutput: false,
+        output: appendOutput,
+        useColors: false,
+        markdownFormat: true
+      });
+      
+      return { markdown: output };
+    }
+  );
+  
+  // Add describe_raw tool with explicit schema
+  server.tool(
+    "describe_raw",
+    "Describe an API endpoint by its path with raw JSON output",
+    {
+      apiPath: z.string().min(1).describe("The API endpoint path to describe")
+    },
+    async (params) => {
+      let output = '';
+      const appendOutput = (text) => {
+        output += text + '\n';
+      };
+      
+      await describeApi(params.apiPath, {
+        rawOutput: true,
+        typeScriptOutput: false,
+        output: appendOutput,
+        useColors: false,
+        markdownFormat: true
+      });
+      
+      return { markdown: output };
+    }
+  );
+  
+  // Add produce_ts tool with explicit schema
+  server.tool(
+    "produce_ts",
+    "Generate TypeScript definitions for an API endpoint",
+    {
+      apiPath: z.string().min(1).describe("The API endpoint path to generate TypeScript for")
+    },
+    async (params) => {
+      let output = '';
+      const appendOutput = (text) => {
+        output += text + '\n';
+      };
+      
+      await describeApi(params.apiPath, {
+        rawOutput: false,
+        typeScriptOutput: true,
         output: appendOutput,
         useColors: false,
         markdownFormat: true
@@ -43,7 +91,7 @@ export async function startMcpServer() {
   // Add get tool with explicit schema
   server.tool(
     "get",
-    "Perform a GET request to an API endpoint",
+    "Perform a GET request to an API endpoint and return the result",
     {
       apiPath: z.string().min(1).describe("The API endpoint path to request"),
       raw: z.boolean().optional().default(false).describe("Whether to show raw JSON output")
@@ -68,7 +116,7 @@ export async function startMcpServer() {
   // Add documentation tool with explicit schema
   server.tool(
     "documentation",
-    "Fetch documentation from GitHub repository",
+    "Fetch integration documentation useful when integrating the KLB API",
     {
       fileName: z.string().optional().default('README.md').describe("The documentation file to fetch")
     },

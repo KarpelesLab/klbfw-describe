@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 
-// A simple script to test the MCP server by sending a command
+// A simple script to test the MCP server 'describe' tool
 import { exec } from 'child_process';
 import fs from 'fs';
 
 // Correct MCP format for tool calls
 const command = {
   "jsonrpc": "2.0",
-  "id": "test-1",
+  "id": "test-describe",
   "method": "tools/call",
   "params": {
-    "name": "describe_raw",
+    "name": "describe",
     "arguments": {
       "apiPath": "User"
     }
@@ -36,7 +36,7 @@ serverProcess.stdout.on('data', (data) => {
     console.log(JSON.stringify(response, null, 2));
     
     // Save to file for inspection
-    fs.writeFileSync('mcp-response.json', JSON.stringify(response, null, 2));
+    fs.writeFileSync('test-mcp-describe.json', JSON.stringify(response, null, 2));
     
     // Exit after getting response
     setTimeout(() => {
