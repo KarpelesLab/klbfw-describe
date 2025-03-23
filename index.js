@@ -74,10 +74,30 @@ const colors = {
  */
 function describeApi(apiPath, options = {}) {
   return new Promise((resolve, reject) => {
-    const { rawOutput = false, typeScriptOutput = false } = options;
+    const { 
+      rawOutput = false, 
+      typeScriptOutput = false,
+      output = console.log,      // Function to use for output
+      useColors = true,          // Whether to use ANSI colors
+      markdownFormat = false     // Whether to use markdown formatting
+    } = options;
     
-    console.log(`\n${colors.bright}${colors.blue}Describing API endpoint:${colors.reset} ${colors.green}${apiPath}${colors.reset}`);
-    console.log(`${colors.dim}Host: ${DEFAULT_API_HOST}${colors.reset}\n`);
+    // Choose output format based on options
+    const printOutput = (text) => output(text);
+    
+    // Helper to format text with or without colors
+    const format = (colorFn, text) => {
+      if (!useColors) return text;
+      return colorFn + text + colors.reset;
+    };
+    
+    if (markdownFormat) {
+      printOutput(`## Describing API endpoint: \`${apiPath}\``);
+      printOutput(`**Host:** ${DEFAULT_API_HOST}\n`);
+    } else {
+      printOutput(`\n${format(colors.bright + colors.blue, "Describing API endpoint:")} ${format(colors.green, apiPath)}`);
+      printOutput(`${format(colors.dim, "Host: " + DEFAULT_API_HOST)}\n`);
+    }
     
     const reqUrl = url.parse(`https://${DEFAULT_API_HOST}${API_PREFIX}${apiPath}`);
     
@@ -99,8 +119,13 @@ function describeApi(apiPath, options = {}) {
       
       res.on('end', () => {
         if (res.statusCode !== 200) {
-          console.log(`${colors.bright}Status:${colors.reset} ${colors.red}${res.statusCode}${colors.reset}`);
-          console.log(`${colors.red}Error: Unable to fetch API information${colors.reset}`);
+          if (markdownFormat) {
+            printOutput(`**Status:** ${res.statusCode}`);
+            printOutput(`**Error:** Unable to fetch API information`);
+          } else {
+            printOutput(`${format(colors.bright, "Status:")} ${format(colors.red, res.statusCode.toString())}`);
+            printOutput(`${format(colors.red, "Error: Unable to fetch API information")}`);
+          }
           resolve();
           return;
         }
@@ -111,27 +136,39 @@ function describeApi(apiPath, options = {}) {
           
           if (rawOutput) {
             // Raw JSON output without formatting
-            console.log('\n' + colors.bright + 'Raw Response:' + colors.reset);
-            console.log(JSON.stringify(jsonData, null, 2));
+            if (markdownFormat) {
+              printOutput(`\n### Raw Response:\n\`\`\`json\n${JSON.stringify(jsonData, null, 2)}\n\`\`\``);
+            } else {
+              printOutput('\n' + format(colors.bright, 'Raw Response:'));
+              printOutput(JSON.stringify(jsonData, null, 2));
+            }
           } else if (typeScriptOutput) {
             // TypeScript definition output
-            generateTypeScriptDefinitions(jsonData);
+            generateTypeScriptDefinitions(jsonData, { output: printOutput, useColors, markdownFormat });
           } else {
             // Formatted output
-            formatJsonResponse(jsonData);
+            formatJsonResponse(jsonData, { output: printOutput, useColors, markdownFormat });
           }
           resolve();
         } catch (e) {
           // If not JSON, output as text
-          console.log(`\n${colors.bright}Response (Text):${colors.reset}`);
-          console.log(data);
+          if (markdownFormat) {
+            printOutput(`\n### Response (Text):\n\`\`\`\n${data}\n\`\`\``);
+          } else {
+            printOutput(`\n${format(colors.bright, "Response (Text):")}`);
+            printOutput(data);
+          }
           resolve();
         }
       });
     });
     
     req.on('error', (e) => {
-      console.error(`${colors.red}Error:${colors.reset} ${e.message}`);
+      if (markdownFormat) {
+        printOutput(`**Error:** ${e.message}`);
+      } else {
+        printOutput(`${format(colors.red, "Error:")} ${e.message}`);
+      }
       reject(e);
     });
     
@@ -144,10 +181,30 @@ function describeApi(apiPath, options = {}) {
  */
 function fetchDocumentation(fileName = 'README.md', options = {}) {
   return new Promise((resolve, reject) => {
+    const { 
+      output = console.log,      // Function to use for output
+      useColors = true,          // Whether to use ANSI colors
+      markdownFormat = false     // Whether to use markdown formatting
+    } = options;
+    
+    // Choose output format based on options
+    const printOutput = (text) => output(text);
+    
+    // Helper to format text with or without colors
+    const format = (colorFn, text) => {
+      if (!useColors) return text;
+      return colorFn + text + colors.reset;
+    };
+    
     const docUrl = url.parse(`${DOC_REPO_URL}${fileName}`);
     
-    console.log(`\n${colors.bright}${colors.blue}Fetching documentation:${colors.reset} ${colors.green}${fileName}${colors.reset}`);
-    console.log(`${colors.dim}Source: ${DOC_REPO_URL}${fileName}${colors.reset}\n`);
+    if (markdownFormat) {
+      printOutput(`## Fetching documentation: \`${fileName}\``);
+      printOutput(`**Source:** ${DOC_REPO_URL}${fileName}\n`);
+    } else {
+      printOutput(`\n${format(colors.bright + colors.blue, "Fetching documentation:")} ${format(colors.green, fileName)}`);
+      printOutput(`${format(colors.dim, "Source: " + DOC_REPO_URL + fileName)}\n`);
+    }
     
     const reqOptions = {
       hostname: docUrl.hostname,
@@ -167,24 +224,39 @@ function fetchDocumentation(fileName = 'README.md', options = {}) {
       
       res.on('end', () => {
         if (res.statusCode !== 200) {
-          console.log(`${colors.bright}Status:${colors.reset} ${colors.red}${res.statusCode}${colors.reset}`);
-          console.log(`${colors.red}Error: Unable to fetch documentation${colors.reset}`);
+          if (markdownFormat) {
+            printOutput(`**Status:** ${res.statusCode}`);
+            printOutput(`**Error:** Unable to fetch documentation`);
+          } else {
+            printOutput(`${format(colors.bright, "Status:")} ${format(colors.red, res.statusCode.toString())}`);
+            printOutput(`${format(colors.red, "Error: Unable to fetch documentation")}`);
+          }
           resolve();
           return;
         }
         
         // Display the markdown content
-        console.log(`${colors.bright}${colors.blue}Documentation:${colors.reset}\n`);
-        
-        // Apply some basic Markdown formatting
-        const formattedText = formatMarkdown(data);
-        console.log(formattedText);
+        if (markdownFormat) {
+          // For MCP mode, we're already in markdown, so just output the raw documentation
+          printOutput(`\n## Documentation\n`);
+          printOutput(data); // Return the raw markdown directly
+        } else {
+          printOutput(`${format(colors.bright + colors.blue, "Documentation:")}\n`);
+          
+          // Apply some basic Markdown formatting for terminal output
+          const formattedText = formatMarkdown(data);
+          printOutput(formattedText);
+        }
         resolve();
       });
     });
     
     req.on('error', (e) => {
-      console.error(`${colors.red}Error:${colors.reset} ${e.message}`);
+      if (markdownFormat) {
+        printOutput(`**Error:** ${e.message}`);
+      } else {
+        printOutput(`${format(colors.red, "Error:")} ${e.message}`);
+      }
       reject(e);
     });
     
@@ -241,10 +313,29 @@ function formatHeaders(headers) {
  */
 function getApiResource(apiPath, options = {}) {
   return new Promise((resolve, reject) => {
-    const { rawOutput = false } = options;
+    const { 
+      rawOutput = false,
+      output = console.log,      // Function to use for output
+      useColors = true,          // Whether to use ANSI colors
+      markdownFormat = false     // Whether to use markdown formatting
+    } = options;
     
-    console.log(`\n${colors.bright}${colors.blue}Retrieving API resource:${colors.reset} ${colors.green}${apiPath}${colors.reset}`);
-    console.log(`${colors.dim}Host: ${DEFAULT_API_HOST}${colors.reset}\n`);
+    // Choose output format based on options
+    const printOutput = (text) => output(text);
+    
+    // Helper to format text with or without colors
+    const format = (colorFn, text) => {
+      if (!useColors) return text;
+      return colorFn + text + colors.reset;
+    };
+    
+    if (markdownFormat) {
+      printOutput(`## Retrieving API resource: \`${apiPath}\``);
+      printOutput(`**Host:** ${DEFAULT_API_HOST}\n`);
+    } else {
+      printOutput(`\n${format(colors.bright + colors.blue, "Retrieving API resource:")} ${format(colors.green, apiPath)}`);
+      printOutput(`${format(colors.dim, "Host: " + DEFAULT_API_HOST)}\n`);
+    }
     
     const reqUrl = url.parse(`https://${DEFAULT_API_HOST}${API_PREFIX}${apiPath}`);
     
@@ -265,19 +356,36 @@ function getApiResource(apiPath, options = {}) {
       });
       
       res.on('end', () => {
-        console.log(`${colors.bright}Status:${colors.reset} ${res.statusCode === 200 ? colors.green : colors.red}${res.statusCode}${colors.reset}`);
+        if (markdownFormat) {
+          printOutput(`**Status:** ${res.statusCode}`);
+        } else {
+          printOutput(`${format(colors.bright, "Status:")} ${format(res.statusCode === 200 ? colors.green : colors.red, res.statusCode.toString())}`);
+        }
         
         if (res.statusCode !== 200) {
-          console.log(`${colors.red}Error: Unable to fetch resource${colors.reset}`);
+          if (markdownFormat) {
+            printOutput(`**Error:** Unable to fetch resource`);
+          } else {
+            printOutput(`${format(colors.red, "Error: Unable to fetch resource")}`);
+          }
+          
           try {
             // Try to parse error response as JSON
             const errorData = JSON.parse(data);
             if (errorData.error) {
-              console.log(`${colors.red}Error message:${colors.reset} ${errorData.error}`);
+              if (markdownFormat) {
+                printOutput(`**Error message:** ${errorData.error}`);
+              } else {
+                printOutput(`${format(colors.red, "Error message:")} ${errorData.error}`);
+              }
             }
           } catch (e) {
             // If not JSON, output as text
-            console.log(`${colors.red}Response:${colors.reset} ${data}`);
+            if (markdownFormat) {
+              printOutput(`**Response:**\n\`\`\`\n${data}\n\`\`\``);
+            } else {
+              printOutput(`${format(colors.red, "Response:")} ${data}`);
+            }
           }
           resolve();
           return;
@@ -289,24 +397,36 @@ function getApiResource(apiPath, options = {}) {
           
           if (rawOutput) {
             // Raw JSON output without formatting
-            console.log('\n' + colors.bright + 'Response:' + colors.reset);
-            console.log(JSON.stringify(jsonData, null, 2));
+            if (markdownFormat) {
+              printOutput(`\n### Raw Response:\n\`\`\`json\n${JSON.stringify(jsonData, null, 2)}\n\`\`\``);
+            } else {
+              printOutput('\n' + format(colors.bright, 'Response:'));
+              printOutput(JSON.stringify(jsonData, null, 2));
+            }
           } else {
             // Format the JSON output for display
-            formatGetResponse(jsonData);
+            formatGetResponse(jsonData, { output: printOutput, useColors, markdownFormat });
           }
           resolve();
         } catch (e) {
           // If not JSON, output as text
-          console.log(`\n${colors.bright}Response (Text):${colors.reset}`);
-          console.log(data);
+          if (markdownFormat) {
+            printOutput(`\n### Response (Text):\n\`\`\`\n${data}\n\`\`\``);
+          } else {
+            printOutput(`\n${format(colors.bright, "Response (Text):")}`);
+            printOutput(data);
+          }
           resolve();
         }
       });
     });
     
     req.on('error', (e) => {
-      console.error(`${colors.red}Error:${colors.reset} ${e.message}`);
+      if (markdownFormat) {
+        printOutput(`**Error:** ${e.message}`);
+      } else {
+        printOutput(`${format(colors.red, "Error:")} ${e.message}`);
+      }
       reject(e);
     });
     
@@ -317,77 +437,169 @@ function getApiResource(apiPath, options = {}) {
 /**
  * Format a GET response in a more readable way
  */
-function formatGetResponse(jsonData) {
+function formatGetResponse(jsonData, options = {}) {
+  const { 
+    output = console.log,      // Function to use for output
+    useColors = true,          // Whether to use ANSI colors
+    markdownFormat = false     // Whether to use markdown formatting
+  } = options;
+  
+  // Choose output format based on options
+  const printOutput = (text) => output(text);
+  
+  // Helper to format text with or without colors
+  const format = (colorFn, text) => {
+    if (!useColors) return text;
+    return colorFn + text + colors.reset;
+  };
+  
   // Check for standard KLB response structure
   if (jsonData.data !== undefined) {
     // Detect if it's a collection (array) or a single object
     const data = jsonData.data;
     
     if (Array.isArray(data)) {
-      console.log(`\n${colors.bright}${colors.blue}Collection Response:${colors.reset} ${data.length} items\n`);
+      if (markdownFormat) {
+        printOutput(`\n## Collection Response: ${data.length} items\n`);
+      } else {
+        printOutput(`\n${format(colors.bright + colors.blue, "Collection Response:")} ${data.length} items\n`);
+      }
       
       // For large collections, show summary information
       if (data.length > 10) {
-        console.log(`${colors.dim}Showing first 10 items of ${data.length}${colors.reset}\n`);
+        if (markdownFormat) {
+          printOutput(`*Showing first 10 items of ${data.length}*\n`);
+        } else {
+          printOutput(`${format(colors.dim, "Showing first 10 items of " + data.length)}\n`);
+        }
         
         // Show first 10 items
         data.slice(0, 10).forEach((item, index) => {
-          console.log(`${colors.bright}${colors.yellow}Item ${index + 1}:${colors.reset}`);
-          formatObject(item);
-          console.log(''); // Add space between items
+          if (markdownFormat) {
+            printOutput(`### Item ${index + 1}`);
+            formatObject(item, 0, 2, { output: printOutput, useColors, markdownFormat });
+            printOutput(''); // Add space between items
+          } else {
+            printOutput(`${format(colors.bright + colors.yellow, "Item " + (index + 1) + ":")}`);
+            formatObject(item, 0, 2, { output: printOutput, useColors, markdownFormat });
+            printOutput(''); // Add space between items
+          }
         });
       } else {
         // Show all items for smaller collections
         data.forEach((item, index) => {
-          console.log(`${colors.bright}${colors.yellow}Item ${index + 1}:${colors.reset}`);
-          formatObject(item);
-          console.log(''); // Add space between items
+          if (markdownFormat) {
+            printOutput(`### Item ${index + 1}`);
+            formatObject(item, 0, 2, { output: printOutput, useColors, markdownFormat });
+            printOutput(''); // Add space between items
+          } else {
+            printOutput(`${format(colors.bright + colors.yellow, "Item " + (index + 1) + ":")}`);
+            formatObject(item, 0, 2, { output: printOutput, useColors, markdownFormat });
+            printOutput(''); // Add space between items
+          }
         });
       }
     } else if (typeof data === 'object' && data !== null) {
-      console.log(`\n${colors.bright}${colors.blue}Object Response:${colors.reset}\n`);
-      formatObject(data);
+      if (markdownFormat) {
+        printOutput(`\n## Object Response\n`);
+        formatObject(data, 0, 2, { output: printOutput, useColors, markdownFormat });
+      } else {
+        printOutput(`\n${format(colors.bright + colors.blue, "Object Response:")}\n`);
+        formatObject(data, 0, 2, { output: printOutput, useColors, markdownFormat });
+      }
     } else {
       // Simple scalar value
-      console.log(`\n${colors.bright}${colors.blue}Value Response:${colors.reset} ${data}\n`);
+      if (markdownFormat) {
+        printOutput(`\n## Value Response\n\`${data}\`\n`);
+      } else {
+        printOutput(`\n${format(colors.bright + colors.blue, "Value Response:")} ${data}\n`);
+      }
     }
     
     // Show metadata if present
     if (jsonData.total !== undefined) {
-      console.log(`${colors.bright}Total Records:${colors.reset} ${jsonData.total}`);
+      if (markdownFormat) {
+        printOutput(`**Total Records:** ${jsonData.total}`);
+      } else {
+        printOutput(`${format(colors.bright, "Total Records:")} ${jsonData.total}`);
+      }
     }
     if (jsonData.count !== undefined) {
-      console.log(`${colors.bright}Record Count:${colors.reset} ${jsonData.count}`);
+      if (markdownFormat) {
+        printOutput(`**Record Count:** ${jsonData.count}`);
+      } else {
+        printOutput(`${format(colors.bright, "Record Count:")} ${jsonData.count}`);
+      }
     }
     if (jsonData.page !== undefined) {
-      console.log(`${colors.bright}Page:${colors.reset} ${jsonData.page}`);
+      if (markdownFormat) {
+        printOutput(`**Page:** ${jsonData.page}`);
+      } else {
+        printOutput(`${format(colors.bright, "Page:")} ${jsonData.page}`);
+      }
     }
   } else {
     // Non-standard response structure, just pretty-print
-    console.log(`\n${colors.bright}${colors.blue}Response:${colors.reset}\n`);
-    formatObject(jsonData);
+    if (markdownFormat) {
+      printOutput(`\n## Response\n`);
+      formatObject(jsonData, 0, 2, { output: printOutput, useColors, markdownFormat });
+    } else {
+      printOutput(`\n${format(colors.bright + colors.blue, "Response:")}\n`);
+      formatObject(jsonData, 0, 2, { output: printOutput, useColors, markdownFormat });
+    }
   }
 }
 
 /**
  * Format an object for display with color coding
  */
-function formatObject(obj, depth = 0, maxDepth = 2) {
+function formatObject(obj, depth = 0, maxDepth = 2, options = {}) {
+  const { 
+    output = console.log,      // Function to use for output
+    useColors = true,          // Whether to use ANSI colors
+    markdownFormat = false     // Whether to use markdown formatting
+  } = options;
+  
+  // Choose output format based on options
+  const printOutput = (text) => output(text);
+  
+  // Helper to format text with or without colors
+  const format = (colorFn, text) => {
+    if (!useColors) return text;
+    return colorFn + text + colors.reset;
+  };
+  
   if (obj === null) {
-    console.log(`${' '.repeat(depth * 2)}${colors.dim}null${colors.reset}`);
+    if (markdownFormat) {
+      printOutput(`${' '.repeat(depth * 2)}null`);
+    } else {
+      printOutput(`${' '.repeat(depth * 2)}${format(colors.dim, "null")}`);
+    }
     return;
   }
   
   if (typeof obj !== 'object') {
     // Handle primitive types
     if (typeof obj === 'string') {
-      console.log(`${' '.repeat(depth * 2)}${colors.green}"${obj}"${colors.reset}`);
+      if (markdownFormat) {
+        printOutput(`${' '.repeat(depth * 2)}"${obj}"`);
+      } else {
+        printOutput(`${' '.repeat(depth * 2)}${format(colors.green, `"${obj}"`)}`);
+      }
     } else if (typeof obj === 'number') {
-      console.log(`${' '.repeat(depth * 2)}${colors.yellow}${obj}${colors.reset}`);
+      if (markdownFormat) {
+        printOutput(`${' '.repeat(depth * 2)}${obj}`);
+      } else {
+        printOutput(`${' '.repeat(depth * 2)}${format(colors.yellow, obj.toString())}`);
+      }
     } else if (typeof obj === 'boolean') {
-      console.log(`${' '.repeat(depth * 2)}${colors.magenta}${obj}${colors.reset}`);
+      if (markdownFormat) {
+        printOutput(`${' '.repeat(depth * 2)}${obj}`);
+      } else {
+        printOutput(`${' '.repeat(depth * 2)}${format(colors.magenta, obj.toString())}`);
+      }
     } else {
-      console.log(`${' '.repeat(depth * 2)}${obj}`);
+      printOutput(`${' '.repeat(depth * 2)}${obj}`);
     }
     return;
   }
@@ -395,68 +607,102 @@ function formatObject(obj, depth = 0, maxDepth = 2) {
   // Handle arrays
   if (Array.isArray(obj)) {
     if (obj.length === 0) {
-      console.log(`${' '.repeat(depth * 2)}${colors.dim}[]${colors.reset}`);
+      if (markdownFormat) {
+        printOutput(`${' '.repeat(depth * 2)}[]`);
+      } else {
+        printOutput(`${' '.repeat(depth * 2)}${format(colors.dim, "[]")}`);
+      }
       return;
     }
     
     if (depth >= maxDepth) {
-      console.log(`${' '.repeat(depth * 2)}${colors.dim}[Array(${obj.length})]${colors.reset}`);
+      if (markdownFormat) {
+        printOutput(`${' '.repeat(depth * 2)}[Array with ${obj.length} items]`);
+      } else {
+        printOutput(`${' '.repeat(depth * 2)}${format(colors.dim, `[Array(${obj.length})]`)}`);
+      }
       return;
     }
     
     // For simple arrays with primitive values, show inline
     const allPrimitive = obj.every(item => typeof item !== 'object' || item === null);
     if (allPrimitive && obj.length <= 5) {
-      const values = obj.map(item => {
-        if (item === null) return `${colors.dim}null${colors.reset}`;
-        if (typeof item === 'string') return `${colors.green}"${item}"${colors.reset}`;
-        if (typeof item === 'number') return `${colors.yellow}${item}${colors.reset}`;
-        if (typeof item === 'boolean') return `${colors.magenta}${item}${colors.reset}`;
-        return item;
-      }).join(', ');
-      
-      console.log(`${' '.repeat(depth * 2)}[${values}]`);
+      if (markdownFormat) {
+        const values = obj.map(item => {
+          if (item === null) return 'null';
+          if (typeof item === 'string') return `"${item}"`;
+          return item.toString();
+        }).join(', ');
+        
+        printOutput(`${' '.repeat(depth * 2)}[${values}]`);
+      } else {
+        const values = obj.map(item => {
+          if (item === null) return format(colors.dim, "null");
+          if (typeof item === 'string') return format(colors.green, `"${item}"`);
+          if (typeof item === 'number') return format(colors.yellow, item.toString());
+          if (typeof item === 'boolean') return format(colors.magenta, item.toString());
+          return item.toString();
+        }).join(', ');
+        
+        printOutput(`${' '.repeat(depth * 2)}[${values}]`);
+      }
       return;
     }
     
     // For more complex or larger arrays, show vertically
-    console.log(`${' '.repeat(depth * 2)}[`);
+    printOutput(`${' '.repeat(depth * 2)}[`);
     
     // Limit large arrays in output
     const displayItems = obj.length > 5 ? obj.slice(0, 5) : obj;
     displayItems.forEach((item, i) => {
-      formatObject(item, depth + 1, maxDepth);
+      formatObject(item, depth + 1, maxDepth, options);
       if (i < displayItems.length - 1) {
-        console.log(`${' '.repeat((depth + 1) * 2)},`);
+        printOutput(`${' '.repeat((depth + 1) * 2)},`);
       }
     });
     
     if (obj.length > 5) {
-      console.log(`${' '.repeat((depth + 1) * 2)}${colors.dim}... ${obj.length - 5} more items${colors.reset}`);
+      if (markdownFormat) {
+        printOutput(`${' '.repeat((depth + 1) * 2)}... ${obj.length - 5} more items`);
+      } else {
+        printOutput(`${' '.repeat((depth + 1) * 2)}${format(colors.dim, `... ${obj.length - 5} more items`)}`);
+      }
     }
     
-    console.log(`${' '.repeat(depth * 2)}]`);
+    printOutput(`${' '.repeat(depth * 2)}]`);
     return;
   }
   
   // Handle objects
   const keys = Object.keys(obj);
   if (keys.length === 0) {
-    console.log(`${' '.repeat(depth * 2)}${colors.dim}{}${colors.reset}`);
+    if (markdownFormat) {
+      printOutput(`${' '.repeat(depth * 2)}{}`);
+    } else {
+      printOutput(`${' '.repeat(depth * 2)}${format(colors.dim, "{}")}`);
+    }
     return;
   }
   
   if (depth >= maxDepth) {
-    console.log(`${' '.repeat(depth * 2)}${colors.dim}{Object with ${keys.length} properties}${colors.reset}`);
+    if (markdownFormat) {
+      printOutput(`${' '.repeat(depth * 2)}{Object with ${keys.length} properties}`);
+    } else {
+      printOutput(`${' '.repeat(depth * 2)}${format(colors.dim, `{Object with ${keys.length} properties}`)}`);
+    }
     return;
   }
   
-  console.log(`${' '.repeat(depth * 2)}{`);
+  printOutput(`${' '.repeat(depth * 2)}{`);
   
   // Special handling for KlbDateTime objects
   if (obj.unix !== undefined && obj.iso !== undefined && obj.tz !== undefined) {
-    console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"iso":${colors.reset} ${colors.green}"${obj.iso}"${colors.reset}`);
-    console.log(`${' '.repeat(depth * 2)}}`);
+    if (markdownFormat) {
+      printOutput(`${' '.repeat((depth + 1) * 2)}"iso": "${obj.iso}"`);
+    } else {
+      printOutput(`${' '.repeat((depth + 1) * 2)}${format(colors.cyan, '"iso"')}: ${format(colors.green, `"${obj.iso}"`)}`);
+    }
+    printOutput(`${' '.repeat(depth * 2)}}`);
     return;
   }
   
@@ -495,24 +741,56 @@ function formatObject(obj, depth = 0, maxDepth = 2) {
       const baseFieldName = key.slice(0, -7); // Remove _Text__ suffix
       const textValue = obj[baseFieldName];
       
-      console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"${key}":${colors.reset} ${colors.green}"${value}"${colors.reset} ${colors.dim}// Translatable ID${colors.reset}`);
-      
-      if (textValue !== undefined) {
-        console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"${baseFieldName}":${colors.reset} ${colors.green}"${textValue}"${colors.reset} ${colors.dim}// Translated text${colors.reset}`);
+      if (markdownFormat) {
+        printOutput(`${' '.repeat((depth + 1) * 2)}"${key}": "${value}" // Translatable ID`);
+        
+        if (textValue !== undefined) {
+          printOutput(`${' '.repeat((depth + 1) * 2)}"${baseFieldName}": "${textValue}" // Translated text`);
+        }
+      } else {
+        printOutput(`${' '.repeat((depth + 1) * 2)}${format(colors.cyan, `"${key}"`)}:${format(colors.reset, "")} ${format(colors.green, `"${value}"`)} ${format(colors.dim, "// Translatable ID")}`);
+        
+        if (textValue !== undefined) {
+          printOutput(`${' '.repeat((depth + 1) * 2)}${format(colors.cyan, `"${baseFieldName}"`)}:${format(colors.reset, "")} ${format(colors.green, `"${textValue}"`)} ${format(colors.dim, "// Translated text")}`);
+        }
       }
     } else if (typeof value === 'object' && value !== null) {
-      console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"${key}":${colors.reset}`);
-      formatObject(value, depth + 1, maxDepth);
+      if (markdownFormat) {
+        printOutput(`${' '.repeat((depth + 1) * 2)}"${key}":`);
+      } else {
+        printOutput(`${' '.repeat((depth + 1) * 2)}${format(colors.cyan, `"${key}"`)}:`);
+      }
+      formatObject(value, depth + 1, maxDepth, options);
     } else if (typeof value === 'string') {
-      console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"${key}":${colors.reset} ${colors.green}"${value}"${colors.reset}`);
+      if (markdownFormat) {
+        printOutput(`${' '.repeat((depth + 1) * 2)}"${key}": "${value}"`);
+      } else {
+        printOutput(`${' '.repeat((depth + 1) * 2)}${format(colors.cyan, `"${key}"`)}:${format(colors.reset, "")} ${format(colors.green, `"${value}"`)}`);
+      }
     } else if (typeof value === 'number') {
-      console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"${key}":${colors.reset} ${colors.yellow}${value}${colors.reset}`);
+      if (markdownFormat) {
+        printOutput(`${' '.repeat((depth + 1) * 2)}"${key}": ${value}`);
+      } else {
+        printOutput(`${' '.repeat((depth + 1) * 2)}${format(colors.cyan, `"${key}"`)}:${format(colors.reset, "")} ${format(colors.yellow, value.toString())}`);
+      }
     } else if (typeof value === 'boolean') {
-      console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"${key}":${colors.reset} ${colors.magenta}${value}${colors.reset}`);
+      if (markdownFormat) {
+        printOutput(`${' '.repeat((depth + 1) * 2)}"${key}": ${value}`);
+      } else {
+        printOutput(`${' '.repeat((depth + 1) * 2)}${format(colors.cyan, `"${key}"`)}:${format(colors.reset, "")} ${format(colors.magenta, value.toString())}`);
+      }
     } else if (value === null) {
-      console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"${key}":${colors.reset} ${colors.dim}null${colors.reset}`);
+      if (markdownFormat) {
+        printOutput(`${' '.repeat((depth + 1) * 2)}"${key}": null`);
+      } else {
+        printOutput(`${' '.repeat((depth + 1) * 2)}${format(colors.cyan, `"${key}"`)}:${format(colors.reset, "")} ${format(colors.dim, "null")}`);
+      }
     } else {
-      console.log(`${' '.repeat((depth + 1) * 2)}${colors.cyan}"${key}":${colors.reset} ${value}`);
+      if (markdownFormat) {
+        printOutput(`${' '.repeat((depth + 1) * 2)}"${key}": ${value}`);
+      } else {
+        printOutput(`${' '.repeat((depth + 1) * 2)}${format(colors.cyan, `"${key}"`)}:${format(colors.reset, "")} ${value}`);
+      }
     }
     
     // Add comma after all fields except the last one
@@ -520,12 +798,12 @@ function formatObject(obj, depth = 0, maxDepth = 2) {
       const nextKey = sortedKeys[i + 1];
       // Don't add comma if the next field is an auto-generated text field that corresponds to the current field
       if (!(textFields[nextKey] && nextKey === key.slice(0, -7))) {
-        console.log(`${' '.repeat((depth + 1) * 2)},`);
+        printOutput(`${' '.repeat((depth + 1) * 2)},`);
       }
     }
   });
   
-  console.log(`${' '.repeat(depth * 2)}}`);
+  printOutput(`${' '.repeat(depth * 2)}}`);
 }
 
 /**
@@ -1289,8 +1567,23 @@ function formatJsonResponse(jsonData, options = {}) {
 /**
  * Retrieve and display available API objects from the root endpoint
  */
-function describeRootObjects() {
+function describeRootObjects(options = {}) {
   return new Promise((resolve, reject) => {
+    const { 
+      output = console.log,      // Function to use for output
+      useColors = true,          // Whether to use ANSI colors
+      markdownFormat = false     // Whether to use markdown formatting
+    } = options;
+    
+    // Choose output format based on options
+    const printOutput = (text) => output(text);
+    
+    // Helper to format text with or without colors
+    const format = (colorFn, text) => {
+      if (!useColors) return text;
+      return colorFn + text + colors.reset;
+    };
+
     const reqUrl = url.parse(`https://${DEFAULT_API_HOST}${API_PREFIX}`);
     
     const reqOptions = {
@@ -1311,8 +1604,13 @@ function describeRootObjects() {
       
       res.on('end', () => {
         if (res.statusCode !== 200) {
-          console.log(`${colors.bright}Status:${colors.reset} ${colors.red}${res.statusCode}${colors.reset}`);
-          console.log(`${colors.red}Error: Unable to fetch root API information${colors.reset}`);
+          if (markdownFormat) {
+            printOutput(`**Status:** ${res.statusCode}`);
+            printOutput(`**Error:** Unable to fetch root API information`);
+          } else {
+            printOutput(`${format(colors.bright, "Status:")} ${format(colors.red, res.statusCode.toString())}`);
+            printOutput(`${format(colors.red, "Error: Unable to fetch root API information")}`);
+          }
           resolve();
           return;
         }
@@ -1321,7 +1619,11 @@ function describeRootObjects() {
           const jsonData = JSON.parse(data);
           
           if (jsonData.data && jsonData.data.prefix) {
-            console.log(`\n${colors.bright}${colors.blue}Available API Objects:${colors.reset}\n`);
+            if (markdownFormat) {
+              printOutput(`\n## Available API Objects\n`);
+            } else {
+              printOutput(`\n${format(colors.bright + colors.blue, "Available API Objects:")}\n`);
+            }
             
             // Group by first letter to organize large lists
             const groups = {};
@@ -1333,32 +1635,63 @@ function describeRootObjects() {
             
             // Display grouped endpoints
             Object.keys(groups).sort().forEach(letter => {
-              console.log(`  ${colors.bright}${letter}${colors.reset}`);
+              if (markdownFormat) {
+                printOutput(`### ${letter}`);
+              } else {
+                printOutput(`  ${format(colors.bright, letter)}`);
+              }
               
               // Sort endpoints within each group
               const sortedEndpoints = groups[letter].sort((a, b) => a.name.localeCompare(b.name));
               
-              sortedEndpoints.forEach(endpoint => {
-                console.log(`    ${colors.green}${endpoint.name}${colors.reset}${endpoint.description ? ` - ${colors.dim}${endpoint.description}${colors.reset}` : ''}`);
-              });
-              console.log(''); // Add space between groups
+              if (markdownFormat) {
+                const endpointList = sortedEndpoints.map(endpoint => {
+                  return endpoint.description 
+                    ? `- \`${endpoint.name}\` - ${endpoint.description}` 
+                    : `- \`${endpoint.name}\``;
+                }).join('\n');
+                printOutput(endpointList);
+                printOutput(''); // Add space between groups
+              } else {
+                sortedEndpoints.forEach(endpoint => {
+                  printOutput(`    ${format(colors.green, endpoint.name)}${endpoint.description ? ` - ${format(colors.dim, endpoint.description)}` : ''}`);
+                });
+                printOutput(''); // Add space between groups
+              }
             });
             
-            console.log(`${colors.dim}Run with a specific API path to get more details about an object.${colors.reset}`);
-            console.log(`${colors.dim}Example: npx @karpeleslab/klbfw-describe User${colors.reset}`);
+            if (markdownFormat) {
+              printOutput(`*Run with a specific API path to get more details about an object.*`);
+              printOutput(`*Example: \`npx @karpeleslab/klbfw-describe User\`*`);
+            } else {
+              printOutput(`${format(colors.dim, "Run with a specific API path to get more details about an object.")}`);
+              printOutput(`${format(colors.dim, "Example: npx @karpeleslab/klbfw-describe User")}`);
+            }
           } else {
-            console.log(`${colors.red}Error: Could not retrieve API object list.${colors.reset}`);
+            if (markdownFormat) {
+              printOutput(`**Error:** Could not retrieve API object list.`);
+            } else {
+              printOutput(`${format(colors.red, "Error: Could not retrieve API object list.")}`);
+            }
           }
           resolve();
         } catch (e) {
-          console.log(`${colors.red}Error parsing API response:${colors.reset} ${e.message}`);
+          if (markdownFormat) {
+            printOutput(`**Error parsing API response:** ${e.message}`);
+          } else {
+            printOutput(`${format(colors.red, "Error parsing API response:")} ${e.message}`);
+          }
           resolve();
         }
       });
     });
     
     req.on('error', (e) => {
-      console.error(`${colors.red}Error:${colors.reset} ${e.message}`);
+      if (markdownFormat) {
+        printOutput(`**Error:** ${e.message}`);
+      } else {
+        printOutput(`${format(colors.red, "Error:")} ${e.message}`);
+      }
       reject(e);
     });
     
@@ -1390,205 +1723,238 @@ function printUsage() {
   console.log(`  npx @karpeleslab/klbfw-describe --mcp`);
 }
 
-// Import MCP SDK
-// We'll need to import dynamically since it's an ESM module
-let McpServer, StdioServerTransport, z;
+// Import MCP SDK dependencies
+// We'll need to import dynamically since MCP SDK is an ESM module
+let z;
 try {
-  // We'll initialize these in startMcpServer() when needed
+  // Zod is used for schema validation in MCP tool parameter definitions
   z = require('zod');
 } catch (err) {
-  // Will handle this in startMcpServer
+  console.error(`Error loading zod module: ${err.message}`);
+  // We'll handle missing dependencies in startMcpServer()
 }
 
 /**
- * Start an MCP server on stdio
+ * Start a simple JSON-RPC server on stdio
+ * 
+ * This implements a basic JSON-RPC server for programmatic access to the
+ * API description functionality. It handles requests in the MCP format.
  */
 async function startMcpServer() {
   console.log(`${colors.bright}${colors.blue}Starting MCP server...${colors.reset}`);
   
   try {
-    // Dynamically import the ESM modules
-    const { McpServer: McpServerClass } = await import('@modelcontextprotocol/sdk/server/mcp.js');
-    const { StdioServerTransport: StdioTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
-    
-    // Create an MCP server with debug mode
-    const server = new McpServerClass({
-      name: "klbfw-describe",
-      version: "0.5.6",
-      debug: true // Enable debug mode
-    });
-    
-    // Add the describe tool
-    server.tool("describe",
-      { 
-        apiPath: z.string().describe('The API path to describe'),
-        raw: z.boolean().optional().describe('Show raw JSON output without formatting'),
-        typescript: z.boolean().optional().describe('Generate TypeScript type definitions')
-      },
-      "Describe an API endpoint's capabilities and structure",
-      async ({ apiPath, raw = false, typescript = false }) => {
-        try {
-          const output = await captureOutput(async () => {
-            await describeApi(apiPath, { 
-              rawOutput: raw, 
-              typeScriptOutput: typescript,
-              silent: true // Don't directly output to console
-            });
-          });
-          
-          return {
-            content: [{ type: "text", text: output }]
-          };
-        } catch (err) {
-          // Return the error in the response for debugging
-          console.error("MCP describe error:", err);
-          return {
-            content: [{ 
-              type: "text", 
-              text: `Error: ${err.message}\nStack: ${err.stack}` 
-            }]
-          };
-        }
-      }
-    );
-    
-    // Add the get tool
-    server.tool("get",
-      { 
-        apiPath: z.string().describe('The API path to request'),
-        raw: z.boolean().optional().describe('Show raw JSON output without formatting')
-      },
-      "Perform a GET request on an API endpoint to retrieve data",
-      async ({ apiPath, raw = false }) => {
-        try {
-          const output = await captureOutput(async () => {
-            await getApiResource(apiPath, { 
-              rawOutput: raw,
-              silent: true // Don't directly output to console
-            });
-          });
-          
-          return {
-            content: [{ type: "text", text: output }]
-          };
-        } catch (err) {
-          // Return the error in the response for debugging
-          console.error("MCP get error:", err);
-          return {
-            content: [{ 
-              type: "text", 
-              text: `Error: ${err.message}\nStack: ${err.stack}` 
-            }]
-          };
-        }
-      }
-    );
-    
-    // Add the listObjects tool
-    server.tool("listObjects", 
-      {},
-      "List available top-level API objects in the KLB API",
-      async () => {
-        try {
-          const output = await captureOutput(async () => {
-            await describeRootObjects(true); // Silent mode
-          });
-          
-          return {
-            content: [{ type: "text", text: output }]
-          };
-        } catch (err) {
-          // Return the error in the response for debugging
-          console.error("MCP listObjects error:", err);
-          return {
-            content: [{ 
-              type: "text", 
-              text: `Error: ${err.message}\nStack: ${err.stack}` 
-            }]
-          };
-        }
-      }
-    );
-    
-    // Add the doc tool
-    server.tool("doc",
-      {
-        fileName: z.string().optional().describe('Documentation file to fetch (default: README.md)')
-      },
-      "Access reference documentation for KLB API integration",
-      async ({ fileName = 'README.md' }) => {
-        try {
-          const output = await captureOutput(async () => {
-            await fetchDocumentation(fileName, {
-              silent: true // Don't directly output to console
-            });
-          });
-          
-          return {
-            content: [{ type: "text", text: output }]
-          };
-        } catch (err) {
-          // Return the error in the response for debugging
-          console.error("MCP doc error:", err);
-          return {
-            content: [{ 
-              type: "text", 
-              text: `Error: ${err.message}\nStack: ${err.stack}` 
-            }]
-          };
-        }
-      }
-    );
-    
-    // Helper function to capture console.log output
-    async function captureOutput(fn) {
-      // Capture console.log output
-      const originalConsoleLog = console.log;
-      const originalConsoleError = console.error;
-      let output = '';
+    // Create output collectors for our APIs
+    const bufferOutput = async (fn, args) => {
+      // Create a buffer to collect output
+      let buffer = [];
       
-      // Capture all console output
-      console.log = function(...args) {
-        // Convert all args to strings and join them
-        const line = args.map(arg => 
-          typeof arg === 'string' ? arg : JSON.stringify(arg)
-        ).join(' ');
-        
-        output += line + '\n';
+      // Create a collecting function
+      const collect = (text) => {
+        if (text !== undefined && text !== null) {
+          buffer.push(text);
+        }
       };
       
-      console.error = function(...args) {
-        // Convert all args to strings and join them
-        const line = args.map(arg => 
-          typeof arg === 'string' ? arg : JSON.stringify(arg)
-        ).join(' ');
-        
-        output += `ERROR: ${line}\n`;
-        originalConsoleError(...args); // Still log to stderr for debugging
-      };
+      // Call the function with our collector
+      await fn(args, {
+        output: collect,
+        useColors: false,
+        markdownFormat: true
+      });
       
-      try {
-        await fn();
-        return output || "Command completed successfully with no output";
-      } catch (err) {
-        output += `\nERROR: ${err.message}\n`;
-        output += `STACK: ${err.stack}\n`;
-        return output;
-      } finally {
-        // Restore console functions
-        console.log = originalConsoleLog;
-        console.error = originalConsoleError;
-      }
-    }
+      // Return the collected output
+      return buffer.join('\n');
+    };
     
-    // Start the server on stdin/stdout
-    const transport = new StdioTransport();
-    await server.connect(transport);
+    // Define our available tools and their handlers
+    const tools = {
+      // Describe API endpoint
+      describe: async (args) => {
+        try {
+          const output = await bufferOutput(describeApi, args.apiPath);
+          return {
+            content: [{ type: "text", text: output }]
+          };
+        } catch (err) {
+          return {
+            content: [{ type: "text", text: `## Error\n${err.message}` }],
+            isError: true
+          };
+        }
+      },
+      
+      // GET request
+      get: async (args) => {
+        try {
+          const output = await bufferOutput(getApiResource, args.apiPath);
+          return {
+            content: [{ type: "text", text: output }]
+          };
+        } catch (err) {
+          return {
+            content: [{ type: "text", text: `## Error\n${err.message}` }],
+            isError: true
+          };
+        }
+      },
+      
+      // List objects
+      listObjects: async () => {
+        try {
+          // For the listObjects method, we need a special handler since it doesn't take arguments
+          let buffer = [];
+          const collect = (text) => {
+            if (text !== undefined && text !== null) {
+              buffer.push(text);
+            }
+          };
+          
+          await describeRootObjects({ 
+            output: collect,
+            useColors: false,
+            markdownFormat: true
+          });
+          
+          return {
+            content: [{ type: "text", text: buffer.join('\n') || "## Available API Objects\n\nNo API objects found." }]
+          };
+        } catch (err) {
+          return {
+            content: [{ type: "text", text: `## Error\n${err.message}` }],
+            isError: true
+          };
+        }
+      },
+      
+      // Fetch documentation
+      doc: async (args) => {
+        try {
+          const fileName = args.fileName || 'README.md';
+          const output = await bufferOutput(fetchDocumentation, fileName);
+          return {
+            content: [{ type: "text", text: output }]
+          };
+        } catch (err) {
+          return {
+            content: [{ type: "text", text: `## Error\n${err.message}` }],
+            isError: true
+          };
+        }
+      }
+    };
+    
+    // Start listening for JSON-RPC requests on stdin
+    process.stdin.setEncoding('utf8');
     
     console.log(`${colors.dim}MCP server started on stdio. Waiting for commands...${colors.reset}`);
+    
+    // Listen for JSON-RPC requests
+    process.stdin.on('data', async (data) => {
+      try {
+        // Parse the JSON-RPC request
+        const request = JSON.parse(data);
+        
+        // Check if it's a valid JSON-RPC request
+        if (request.jsonrpc !== '2.0' || !request.id || !request.method) {
+          const error = {
+            jsonrpc: '2.0',
+            id: request.id || null,
+            error: {
+              code: -32600,
+              message: 'Invalid Request'
+            }
+          };
+          process.stdout.write(JSON.stringify(error) + '\n');
+          return;
+        }
+        
+        // Handle tools/call method
+        if (request.method === 'tools/call') {
+          const toolName = request.params.name;
+          const toolArgs = request.params.arguments;
+          
+          // Check if the tool exists
+          if (!tools[toolName]) {
+            const error = {
+              jsonrpc: '2.0',
+              id: request.id,
+              error: {
+                code: -32601,
+                message: 'Method not found'
+              }
+            };
+            process.stdout.write(JSON.stringify(error) + '\n');
+            return;
+          }
+          
+          try {
+            // Call the tool handler
+            const result = await tools[toolName](toolArgs);
+            
+            // Send the response
+            const response = {
+              jsonrpc: '2.0',
+              id: request.id,
+              result: result
+            };
+            process.stdout.write(JSON.stringify(response) + '\n');
+          } catch (err) {
+            // Handle tool execution error
+            const error = {
+              jsonrpc: '2.0',
+              id: request.id,
+              error: {
+                code: -32000,
+                message: err.message
+              }
+            };
+            process.stdout.write(JSON.stringify(error) + '\n');
+          }
+        } else {
+          // Method not supported
+          const error = {
+            jsonrpc: '2.0',
+            id: request.id,
+            error: {
+              code: -32601,
+              message: 'Method not found'
+            }
+          };
+          process.stdout.write(JSON.stringify(error) + '\n');
+        }
+      } catch (err) {
+        // Handle parse error
+        const error = {
+          jsonrpc: '2.0',
+          id: null,
+          error: {
+            code: -32700,
+            message: 'Parse error'
+          }
+        };
+        process.stdout.write(JSON.stringify(error) + '\n');
+      }
+    });
+    
+    // Keep the process running
+    process.stdin.resume();
   } catch (err) {
     console.error(`${colors.red}Error starting MCP server:${colors.reset} ${err.message}`);
     console.error(`${colors.red}Stack:${colors.reset} ${err.stack}`);
+    
+    // Create a JSON-RPC error response for the client
+    const errorResponse = {
+      jsonrpc: '2.0',
+      id: null,
+      error: {
+        code: -32000,
+        message: `Server initialization error: ${err.message}`
+      }
+    };
+    
+    // Send the error to stdout and exit
+    process.stdout.write(JSON.stringify(errorResponse) + '\n');
     process.exit(1);
   }
 }
