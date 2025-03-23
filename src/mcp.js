@@ -10,7 +10,7 @@ export async function startMcpServer() {
   // Create an MCP server
   const server = new McpServer({
     name: "klbfw-describe",
-    version: "0.5.11" // Match package.json version
+    version: "0.5.13" // Match package.json version
   });
   
   // Add describe tool with explicit schema
@@ -34,7 +34,7 @@ export async function startMcpServer() {
         markdownFormat: true
       });
       
-      return { markdown: output };
+      return { content: [{ type: "text", text: output }] };
     }
   );
   
@@ -59,7 +59,7 @@ export async function startMcpServer() {
         markdownFormat: true
       });
       
-      return { markdown: output };
+      return { content: [{ type: "text", text: output }] };
     }
   );
   
@@ -84,7 +84,7 @@ export async function startMcpServer() {
         markdownFormat: true
       });
       
-      return { markdown: output };
+      return { content: [{ type: "text", text: output }] };
     }
   );
   
@@ -109,7 +109,7 @@ export async function startMcpServer() {
         markdownFormat: true
       });
       
-      return { markdown: output };
+      return { content: [{ type: "text", text: output }] };
     }
   );
   
@@ -132,7 +132,7 @@ export async function startMcpServer() {
         markdownFormat: true
       });
       
-      return { markdown: output };
+      return { content: [{ type: "text", text: output }] };
     }
   );
   
