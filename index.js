@@ -15,6 +15,7 @@
  *   --raw          Show raw JSON output without formatting
  *   --ts, --types  Generate TypeScript type definitions
  *   --get          Perform a GET request instead of OPTIONS
+ *   --mcp          Start an MCP server on stdio for programmatic access
  * 
  * Examples:
  *   npx @karpeleslab/klbfw-describe User
@@ -23,6 +24,7 @@
  *   npx @karpeleslab/klbfw-describe --raw User
  *   npx @karpeleslab/klbfw-describe --ts User
  *   npx @karpeleslab/klbfw-describe --get User/ce8b57ca-8961-49c5-863a-b79ab3e1e4a0
+ *   npx @karpeleslab/klbfw-describe --mcp
  */
 
 const https = require('https');
@@ -1261,6 +1263,7 @@ function printUsage() {
   console.log(`  --raw              Show raw JSON output without formatting`);
   console.log(`  --ts, --types      Generate TypeScript type definitions`);
   console.log(`  --get              Perform a GET request instead of OPTIONS`);
+  console.log(`  --mcp              Start an MCP server on stdio for programmatic access`);
   console.log(`  --help, -h         Show this help message`);
   console.log(`\n${colors.bright}Examples:${colors.reset}`);
   console.log(`  npx @karpeleslab/klbfw-describe User`);
@@ -1269,12 +1272,142 @@ function printUsage() {
   console.log(`  npx @karpeleslab/klbfw-describe --raw User`);
   console.log(`  npx @karpeleslab/klbfw-describe --ts User`);
   console.log(`  npx @karpeleslab/klbfw-describe --get User/12345`);
+  console.log(`  npx @karpeleslab/klbfw-describe --mcp`);
+}
+
+// Import MCP SDK
+// We'll need to import dynamically since it's an ESM module
+let McpServer, StdioServerTransport, z;
+try {
+  // We'll initialize these in startMcpServer() when needed
+  z = require('zod');
+} catch (err) {
+  // Will handle this in startMcpServer
+}
+
+/**
+ * Start an MCP server on stdio
+ */
+async function startMcpServer() {
+  console.log(`${colors.bright}${colors.blue}Starting MCP server...${colors.reset}`);
+  
+  try {
+    // Dynamically import the ESM modules
+    const { McpServer: McpServerClass } = await import('@modelcontextprotocol/sdk/server/mcp.js');
+    const { StdioServerTransport: StdioTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
+    
+    // Create an MCP server
+    const server = new McpServerClass({
+      name: "klbfw-describe",
+      version: "0.5.2"
+    });
+    
+    // Add the describe tool
+    server.tool("describe",
+      { 
+        apiPath: z.string().describe('The API path to describe'),
+        raw: z.boolean().optional().describe('Show raw JSON output without formatting'),
+        typescript: z.boolean().optional().describe('Generate TypeScript type definitions')
+      },
+      async ({ apiPath, raw = false, typescript = false }) => {
+        const output = await captureOutput((done) => {
+          describeApi(apiPath, { 
+            rawOutput: raw, 
+            typeScriptOutput: typescript,
+            silent: true // Don't directly output to console
+          });
+          
+          // Give time for async operations to complete
+          setTimeout(done, 1000);
+        });
+        
+        return {
+          content: [{ type: "text", text: output }]
+        };
+      }
+    );
+    
+    // Add the get tool
+    server.tool("get",
+      { 
+        apiPath: z.string().describe('The API path to request'),
+        raw: z.boolean().optional().describe('Show raw JSON output without formatting')
+      },
+      async ({ apiPath, raw = false }) => {
+        const output = await captureOutput((done) => {
+          getApiResource(apiPath, { 
+            rawOutput: raw,
+            silent: true // Don't directly output to console
+          });
+          
+          // Give time for async operations to complete
+          setTimeout(done, 1000);
+        });
+        
+        return {
+          content: [{ type: "text", text: output }]
+        };
+      }
+    );
+    
+    // Add the listObjects tool
+    server.tool("listObjects", 
+      {},
+      async () => {
+        const output = await captureOutput((done) => {
+          describeRootObjects(true); // Silent mode
+          
+          // Give time for async operations to complete
+          setTimeout(done, 1000);
+        });
+        
+        return {
+          content: [{ type: "text", text: output }]
+        };
+      }
+    );
+    
+    // Helper function to capture console.log output
+    function captureOutput(fn) {
+      return new Promise((resolve) => {
+        // Capture console.log output
+        const originalConsoleLog = console.log;
+        let output = '';
+        
+        console.log = function(...args) {
+          // Convert all args to strings and join them
+          const line = args.map(arg => 
+            typeof arg === 'string' ? arg : JSON.stringify(arg)
+          ).join(' ');
+          
+          output += line + '\n';
+        };
+        
+        fn(() => {
+          // Restore console.log and return the collected output
+          console.log = originalConsoleLog;
+          resolve(output);
+        });
+      });
+    }
+    
+    // Start the server on stdin/stdout
+    const transport = new StdioTransport();
+    await server.connect(transport);
+    
+    console.log(`${colors.dim}MCP server started on stdio. Waiting for commands...${colors.reset}`);
+  } catch (err) {
+    console.error(`${colors.red}Error starting MCP server:${colors.reset} ${err.message}`);
+    console.error(`${colors.red}Stack:${colors.reset} ${err.stack}`);
+    process.exit(1);
+  }
 }
 
 // Parse command line arguments
 let rawOutput = false;
 let typeScriptOutput = false;
 let getRequest = false;
+let mcpMode = false;
 let apiPath = null;
 
 const args = process.argv.slice(2);
@@ -1287,6 +1420,8 @@ for (let i = 0; i < args.length; i++) {
     typeScriptOutput = true;
   } else if (arg === '--get') {
     getRequest = true;
+  } else if (arg === '--mcp') {
+    mcpMode = true;
   } else if (arg === '--help' || arg === '-h') {
     printUsage();
     process.exit(0);
@@ -1295,18 +1430,54 @@ for (let i = 0; i < args.length; i++) {
   }
 }
 
-if (!apiPath) {
+// Update function signatures to support silent mode
+const originalDescribeApi = describeApi;
+describeApi = function(apiPath, options = {}) {
+  const { silent = false, ...otherOptions } = options;
+  if (!silent) {
+    return originalDescribeApi(apiPath, otherOptions);
+  }
+  
+  // If silent mode, the function will run but output will be captured by the MCP handler
+  return originalDescribeApi(apiPath, otherOptions);
+};
+
+const originalGetApiResource = getApiResource;
+getApiResource = function(apiPath, options = {}) {
+  const { silent = false, ...otherOptions } = options;
+  if (!silent) {
+    return originalGetApiResource(apiPath, otherOptions);
+  }
+  
+  // If silent mode, the function will run but output will be captured by the MCP handler
+  return originalGetApiResource(apiPath, otherOptions);
+};
+
+const originalDescribeRootObjects = describeRootObjects;
+describeRootObjects = function(silent = false) {
+  if (!silent) {
+    return originalDescribeRootObjects();
+  }
+  
+  // If silent mode, the function will run but output will be captured by the MCP handler
+  return originalDescribeRootObjects();
+};
+
+// Execute in the appropriate mode
+if (mcpMode) {
+  // Need to use top-level await for ESM import
+  (async () => {
+    await startMcpServer();
+  })();
+} else if (!apiPath) {
   printUsage();
   console.log('\n' + colors.bright + 'Retrieving available API objects...' + colors.reset);
   // Get root objects with OPTIONS on /_rest/
   describeRootObjects();
-  return; // Return here to avoid calling describeApi without a path
-}
-
-if (getRequest) {
+} else if (getRequest) {
   // Execute a GET request
   getApiResource(apiPath, { rawOutput });
 } else {
   // Execute the API description
   describeApi(apiPath, { rawOutput, typeScriptOutput });
-};
+}
