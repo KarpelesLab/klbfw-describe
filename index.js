@@ -809,16 +809,39 @@ function formatObject(obj, depth = 0, maxDepth = 2, options = {}) {
 /**
  * Generate TypeScript type definitions for API structures
  */
-function generateTypeScriptDefinitions(jsonData) {
+function generateTypeScriptDefinitions(jsonData, options = {}) {
+  const { 
+    output = console.log,      // Function to use for output
+    useColors = true,          // Whether to use ANSI colors
+    markdownFormat = false     // Whether to use markdown formatting
+  } = options;
+  
+  // Choose output format based on options
+  const printOutput = (text) => output(text);
+  
+  // Helper to format text with or without colors
+  const format = (colorFn, text) => {
+    if (!useColors) return text;
+    return colorFn + text + colors.reset;
+  };
+  
   if (!jsonData.data) {
-    console.log(`${colors.red}Error: No API data found in response${colors.reset}`);
+    if (markdownFormat) {
+      printOutput(`**Error:** No API data found in response`);
+    } else {
+      printOutput(`${format(colors.red, "Error: No API data found in response")}`);
+    }
     return;
   }
   
   const data = jsonData.data;
   const apiPath = data.Path ? data.Path.join('/') : 'Unknown';
   
-  console.log(`\n${colors.bright}${colors.blue}TypeScript definitions for:${colors.reset} ${colors.green}${apiPath}${colors.reset}\n`);
+  if (markdownFormat) {
+    printOutput(`\n## TypeScript definitions for: ${apiPath}\n`);
+  } else {
+    printOutput(`\n${format(colors.bright + colors.blue, "TypeScript definitions for:")} ${format(colors.green, apiPath)}\n`);
+  }
   
   // Check if we need to include KlbDateTime definition
   let hasDateTimeFields = false;
@@ -862,7 +885,7 @@ function generateTypeScriptDefinitions(jsonData) {
   
   // Include KlbDateTime definition if needed
   if (hasDateTimeFields) {
-    console.log(`/**
+    const klbDateTime = `/**
  * KLB DateTime object structure
  */
 export interface KlbDateTime {
@@ -873,38 +896,48 @@ export interface KlbDateTime {
   full: string;    // Full timestamp as string (seconds + microseconds)
   unixms: string;  // Unix timestamp with milliseconds as string
 }
-`);
+`;
+    printOutput(klbDateTime);
   }
   
   // Handle procedures (methods)
   if (data.procedure) {
-    generateProcedureTypes(data);
+    generateProcedureTypes(data, { output, useColors, markdownFormat });
     return;
   }
   
   // Handle resource objects (table-based)
   if (data.table) {
-    generateResourceTypes(data);
+    generateResourceTypes(data, { output, useColors, markdownFormat });
   }
   
   // Handle available methods (functions)
   if (data.func && data.func.length > 0) {
-    generateMethodTypes(data);
+    generateMethodTypes(data, { output, useColors, markdownFormat });
   }
 }
 
 /**
  * Generate TypeScript types for a procedure (method)
  */
-function generateProcedureTypes(data) {
+function generateProcedureTypes(data, options = {}) {
+  const { 
+    output = console.log,
+    useColors = true,
+    markdownFormat = false
+  } = options;
+  
+  // Choose output format based on options
+  const printOutput = (text) => output(text);
+  
   const procedure = data.procedure;
   const pathName = data.Path ? data.Path.join('') : 'Unknown';
   const interfaceName = `I${pathName}${pascalCase(procedure.name)}`;
   
-  console.log(`/**\n * ${procedure.name} procedure interface\n */`);
+  printOutput(`/**\n * ${procedure.name} procedure interface\n */`);
   
   // Generate request interface
-  console.log(`export interface ${interfaceName}Request {`);
+  printOutput(`export interface ${interfaceName}Request {`);
   
   if (procedure.args && procedure.args.length > 0) {
     procedure.args.forEach(arg => {
@@ -926,58 +959,67 @@ function generateProcedureTypes(data) {
       
       const comment = arg.description ? ` // ${arg.description}` : '';
       
-      console.log(`  ${arg.name}${optional}: ${type};${comment}`);
+      printOutput(`  ${arg.name}${optional}: ${type};${comment}`);
     });
   }
   
-  console.log(`}\n`);
+  printOutput(`}\n`);
   
   // Generate response interface if known
   if (procedure.return_type) {
-    console.log(`export interface ${interfaceName}Response {`);
-    console.log(`  // Return type: ${procedure.return_type}`);
-    console.log(`  data: any; // Replace with specific structure if known`);
-    console.log(`}\n`);
+    printOutput(`export interface ${interfaceName}Response {`);
+    printOutput(`  // Return type: ${procedure.return_type}`);
+    printOutput(`  data: any; // Replace with specific structure if known`);
+    printOutput(`}\n`);
   }
   
   // Generate usage example as a comment
-  console.log(`/**`);
-  console.log(` * Usage Example:`);
-  console.log(` * `);
+  printOutput(`/**`);
+  printOutput(` * Usage Example:`);
+  printOutput(` * `);
   
   const path = data.Path ? data.Path.join('/') : '';
   const funcName = procedure.name;
   
-  console.log(` * // TypeScript`);
-  console.log(` * const request: ${interfaceName}Request = {`);
+  printOutput(` * // TypeScript`);
+  printOutput(` * const request: ${interfaceName}Request = {`);
   
   if (procedure.args && procedure.args.length > 0) {
     procedure.args.forEach(arg => {
       const exampleValue = getExampleValue(arg.type);
-      console.log(`  * ${arg.name}: ${exampleValue},`);
+      printOutput(`  * ${arg.name}: ${exampleValue},`);
     });
   }
   
-  console.log(` * };`);
-  console.log(` * `);
+  printOutput(` * };`);
+  printOutput(` * `);
   if (procedure.static) {
-    console.log(` * const response = await klbfw.rest<${interfaceName}Response>('${path}:${funcName}', 'POST', request);`);
+    printOutput(` * const response = await klbfw.rest<${interfaceName}Response>('${path}:${funcName}', 'POST', request);`);
   } else {
-    console.log(` * const response = await klbfw.rest<${interfaceName}Response>('${path}/\${id}:${funcName}', 'POST', request);`);
+    printOutput(` * const response = await klbfw.rest<${interfaceName}Response>('${path}/\${id}:${funcName}', 'POST', request);`);
   }
-  console.log(` */`);
+  printOutput(` */`);
 }
 
 /**
  * Generate TypeScript types for a resource (table-based object)
  */
-function generateResourceTypes(data) {
+function generateResourceTypes(data, options = {}) {
+  const { 
+    output = console.log,
+    useColors = true,
+    markdownFormat = false
+  } = options;
+  
+  // Choose output format based on options
+  const printOutput = (text) => output(text);
+  
   const table = data.table;
   const pathName = data.Path ? data.Path.join('') : 'Unknown';
   const interfaceName = `I${pathName}`;
   
-  console.log(`/**\n * ${table.Name} resource interface\n */`);
-  console.log(`export interface ${interfaceName} {`);
+  printOutput(`/**\n * ${table.Name} resource interface\n */`);
+  printOutput(`export interface ${interfaceName} {`);
   
   // Add fields from the structure
   if (table.Struct) {
@@ -1005,17 +1047,17 @@ function generateResourceTypes(data) {
         comment = ` // protected`;
       }
       
-      console.log(`  ${field}${optional}: ${type};${comment}`);
+      printOutput(`  ${field}${optional}: ${type};${comment}`);
       
       // Add generated text field for fields ending with _Text__
       if (field.endsWith('_Text__')) {
         const baseFieldName = field.slice(0, -7); // Remove _Text__ suffix
-        console.log(`  ${baseFieldName}?: string; // Auto-generated translated text field`);
+        printOutput(`  ${baseFieldName}?: string; // Auto-generated translated text field`);
       }
     });
   }
   
-  console.log(`}\n`);
+  printOutput(`}\n`);
   
   // Generate ID type if there's a primary key
   if (table.Struct && table.Struct._primary) {
@@ -1026,19 +1068,19 @@ function generateResourceTypes(data) {
       const keyInfo = table.Struct[keyField] || {};
       const keyType = keyInfo ? mapToTsType(keyInfo.type, keyInfo) : 'string';
       
-      console.log(`/**\n * ID type for ${table.Name}\n */`);
-      console.log(`export type ${interfaceName}ID = ${keyType};\n`);
+      printOutput(`/**\n * ID type for ${table.Name}\n */`);
+      printOutput(`export type ${interfaceName}ID = ${keyType};\n`);
     } else if (primaryKeys.length > 1) {
-      console.log(`/**\n * Composite ID type for ${table.Name}\n */`);
-      console.log(`export interface ${interfaceName}ID {`);
+      printOutput(`/**\n * Composite ID type for ${table.Name}\n */`);
+      printOutput(`export interface ${interfaceName}ID {`);
       
       primaryKeys.forEach(key => {
         const keyInfo = table.Struct[key] || {};
         const keyType = keyInfo ? mapToTsType(keyInfo.type, keyInfo) : 'string';
-        console.log(`  ${key}: ${keyType};`);
+        printOutput(`  ${key}: ${keyType};`);
       });
       
-      console.log(`}\n`);
+      printOutput(`}\n`);
     }
   }
 }
@@ -1046,17 +1088,26 @@ function generateResourceTypes(data) {
 /**
  * Generate TypeScript types for available methods
  */
-function generateMethodTypes(data) {
+function generateMethodTypes(data, options = {}) {
+  const { 
+    output = console.log,
+    useColors = true,
+    markdownFormat = false
+  } = options;
+  
+  // Choose output format based on options
+  const printOutput = (text) => output(text);
+  
   const funcs = data.func;
   const pathName = data.Path ? data.Path.join('') : 'Unknown';
   
   funcs.forEach(func => {
     const interfaceName = `I${pathName}${pascalCase(func.name)}`;
     
-    console.log(`/**\n * ${func.name} method interface${func.static ? ' (static)' : ''}\n */`);
+    printOutput(`/**\n * ${func.name} method interface${func.static ? ' (static)' : ''}\n */`);
     
     // Generate request interface
-    console.log(`export interface ${interfaceName}Request {`);
+    printOutput(`export interface ${interfaceName}Request {`);
     
     if (func.args && func.args.length > 0) {
       func.args.forEach(arg => {
@@ -1078,46 +1129,46 @@ function generateMethodTypes(data) {
         
         const comment = arg.description ? ` // ${arg.description}` : '';
         
-        console.log(`  ${arg.name}${optional}: ${type};${comment}`);
+        printOutput(`  ${arg.name}${optional}: ${type};${comment}`);
       });
     }
     
-    console.log(`}\n`);
+    printOutput(`}\n`);
     
     // Generate response interface if return type is known
     if (func.return_type) {
-      console.log(`export interface ${interfaceName}Response {`);
-      console.log(`  // Return type: ${func.return_type}`);
-      console.log(`  data: any; // Replace with specific structure if known`);
-      console.log(`}\n`);
+      printOutput(`export interface ${interfaceName}Response {`);
+      printOutput(`  // Return type: ${func.return_type}`);
+      printOutput(`  data: any; // Replace with specific structure if known`);
+      printOutput(`}\n`);
     }
     
     // Generate usage example as a comment
-    console.log(`/**`);
-    console.log(` * Usage Example:`);
-    console.log(` * `);
+    printOutput(`/**`);
+    printOutput(` * Usage Example:`);
+    printOutput(` * `);
     
     const path = data.Path ? data.Path.join('/') : '';
     const funcName = func.name;
     
-    console.log(` * // TypeScript`);
-    console.log(` * const request: ${interfaceName}Request = {`);
+    printOutput(` * // TypeScript`);
+    printOutput(` * const request: ${interfaceName}Request = {`);
     
     if (func.args && func.args.length > 0) {
       func.args.forEach(arg => {
         const exampleValue = getExampleValue(arg.type);
-        console.log(`  * ${arg.name}: ${exampleValue},`);
+        printOutput(`  * ${arg.name}: ${exampleValue},`);
       });
     }
     
-    console.log(` * };`);
-    console.log(` * `);
+    printOutput(` * };`);
+    printOutput(` * `);
     if (func.static) {
-      console.log(` * const response = await klbfw.rest<${interfaceName}Response>('${path}:${funcName}', 'POST', request);`);
+      printOutput(` * const response = await klbfw.rest<${interfaceName}Response>('${path}:${funcName}', 'POST', request);`);
     } else {
-      console.log(` * const response = await klbfw.rest<${interfaceName}Response>('${path}/\${id}:${funcName}', 'POST', request);`);
+      printOutput(` * const response = await klbfw.rest<${interfaceName}Response>('${path}/\${id}:${funcName}', 'POST', request);`);
     }
-    console.log(` */\n`);
+    printOutput(` */\n`);
   });
 }
 
@@ -1257,9 +1308,28 @@ function getExampleValue(type) {
  * Format JSON response in a more readable way
  */
 function formatJsonResponse(jsonData, options = {}) {
-  const { fullOutput = true } = options;
+  const { 
+    fullOutput = true,
+    output = console.log,      // Function to use for output
+    useColors = true,          // Whether to use ANSI colors
+    markdownFormat = false     // Whether to use markdown formatting
+  } = options;
+  
+  // Choose output format based on options
+  const printOutput = (text) => output(text);
+  
+  // Helper to format text with or without colors
+  const format = (colorFn, text) => {
+    if (!useColors) return text;
+    return colorFn + text + colors.reset;
+  };
+  
   if (!jsonData.data) {
-    console.log(`${colors.red}Error: No API data found in response${colors.reset}`);
+    if (markdownFormat) {
+      printOutput(`**Error:** No API data found in response`);
+    } else {
+      printOutput(`${format(colors.red, "Error: No API data found in response")}`);
+    }
     return;
   }
   
@@ -1267,61 +1337,104 @@ function formatJsonResponse(jsonData, options = {}) {
   
   // Print API path
   if (data.Path) {
-    console.log(`\n${colors.bright}${colors.green}API:${colors.reset} ${colors.blue}${data.Path.join('/')}${colors.reset}`);
+    if (markdownFormat) {
+      printOutput(`\n## API: ${data.Path.join('/')}`);
+    } else {
+      printOutput(`\n${format(colors.bright + colors.green, "API:")} ${format(colors.blue, data.Path.join('/'))}`);
+    }
   }
   
   // Display endpoint type (normal, procedure, etc.)
   if (data.procedure) {
-    console.log(`${colors.bright}Type:${colors.reset} Procedure`);
+    if (markdownFormat) {
+      printOutput(`**Type:** Procedure`);
+    } else {
+      printOutput(`${format(colors.bright, "Type:")} Procedure`);
+    }
   } else if (data.table) {
-    console.log(`${colors.bright}Type:${colors.reset} Resource`);
+    if (markdownFormat) {
+      printOutput(`**Type:** Resource`);
+    } else {
+      printOutput(`${format(colors.bright, "Type:")} Resource`);
+    }
   } else if (data.prefix || data.func) {
-    console.log(`${colors.bright}Type:${colors.reset} Collection`);
+    if (markdownFormat) {
+      printOutput(`**Type:** Collection`);
+    } else {
+      printOutput(`${format(colors.bright, "Type:")} Collection`);
+    }
   }
   
   // Display allowed methods - Most important for developers
   if (data.allowed_methods) {
-    const methodsOutput = data.allowed_methods.map(method => {
-      const color = method === 'GET' ? colors.green : 
-                    method === 'POST' ? colors.yellow :
-                    method === 'DELETE' ? colors.red :
-                    method === 'PATCH' || method === 'PUT' ? colors.magenta : 
-                    colors.cyan;
-      return `${color}${method}${colors.reset}`;
-    }).join(', ');
-    
-    console.log(`${colors.bright}Methods:${colors.reset} ${methodsOutput}`);
+    if (markdownFormat) {
+      printOutput(`**Methods:** ${data.allowed_methods.join(', ')}`);
+    } else {
+      const methodsOutput = data.allowed_methods.map(method => {
+        const color = method === 'GET' ? colors.green : 
+                      method === 'POST' ? colors.yellow :
+                      method === 'DELETE' ? colors.red :
+                      method === 'PATCH' || method === 'PUT' ? colors.magenta : 
+                      colors.cyan;
+        return `${color}${method}${colors.reset}`;
+      }).join(', ');
+      
+      printOutput(`${format(colors.bright, "Methods:")} ${methodsOutput}`);
+    }
   }
   
   // Display access info
   if (data.access) {
-    console.log(`${colors.bright}Access:${colors.reset} ${data.access}`);
+    if (markdownFormat) {
+      printOutput(`**Access:** ${data.access}`);
+    } else {
+      printOutput(`${format(colors.bright, "Access:")} ${data.access}`);
+    }
   }
   
   // Display description if available
   if (data.description) {
-    console.log(`\n${colors.bright}Description:${colors.reset}`);
-    console.log(`${colors.dim}${data.description}${colors.reset}`);
+    if (markdownFormat) {
+      printOutput(`\n### Description\n${data.description}`);
+    } else {
+      printOutput(`\n${format(colors.bright, "Description:")}`);
+      printOutput(`${format(colors.dim, data.description)}`);
+    }
   }
   
   // Display procedure info
   if (data.procedure) {
     // For procedures, show detailed information
-    console.log(`\n${colors.bright}${colors.blue}Procedure Details:${colors.reset}`);
-    console.log(`${colors.cyan}Name:${colors.reset} ${data.procedure.name}`);
-    console.log(`${colors.cyan}Type:${colors.reset} ${data.procedure.static ? 'Static' : 'Instance'} Method`);
+    if (markdownFormat) {
+      printOutput(`\n### Procedure Details`);
+      printOutput(`**Name:** ${data.procedure.name}`);
+      printOutput(`**Type:** ${data.procedure.static ? 'Static' : 'Instance'} Method`);
+    } else {
+      printOutput(`\n${format(colors.bright + colors.blue, "Procedure Details:")}`);
+      printOutput(`${format(colors.cyan, "Name:")} ${data.procedure.name}`);
+      printOutput(`${format(colors.cyan, "Type:")} ${data.procedure.static ? 'Static' : 'Instance'} Method`);
+    }
     
     // Display procedure description if available
     if (data.procedure.description) {
-      console.log(`\n${colors.bright}Description:${colors.reset}`);
-      console.log(`${colors.dim}${data.procedure.description}${colors.reset}`);
+      if (markdownFormat) {
+        printOutput(`\n**Description:**\n${data.procedure.description}`);
+      } else {
+        printOutput(`\n${format(colors.bright, "Description:")}`);
+        printOutput(`${format(colors.dim, data.procedure.description)}`);
+      }
     }
     
     // Generate usage example
     if (data.Path) {
       const pathStr = data.Path.join('/');
       const procName = data.procedure.name;
-      console.log(`\n${colors.bright}Usage:${colors.reset}`);
+      
+      if (markdownFormat) {
+        printOutput(`\n**Usage:**`);
+      } else {
+        printOutput(`\n${format(colors.bright, "Usage:")}`);
+      }
       
       // Arguments for usage example
       const args = data.procedure.args || [];
@@ -1340,11 +1453,21 @@ function formatJsonResponse(jsonData, options = {}) {
         return `${argName}: ${argValue}`;
       });
       
-      console.log(`${colors.dim}# JavaScript${colors.reset}`);
-      if (data.procedure.static) {
-        console.log(`klbfw.rest('${pathStr}:${procName}', 'POST', {${argPairs.join(', ')}})`);
+      if (markdownFormat) {
+        printOutput(`\`\`\`javascript`);
+        if (data.procedure.static) {
+          printOutput(`klbfw.rest('${pathStr}:${procName}', 'POST', {${argPairs.join(', ')}})`);
+        } else {
+          printOutput(`klbfw.rest('${pathStr}/\${id}:${procName}', 'POST', {${argPairs.join(', ')}})`);
+        }
+        printOutput(`\`\`\``);
       } else {
-        console.log(`klbfw.rest('${pathStr}/\${id}:${procName}', 'POST', {${argPairs.join(', ')}})`);
+        printOutput(`${format(colors.dim, "# JavaScript")}`);
+        if (data.procedure.static) {
+          printOutput(`klbfw.rest('${pathStr}:${procName}', 'POST', {${argPairs.join(', ')}})`);
+        } else {
+          printOutput(`klbfw.rest('${pathStr}/\${id}:${procName}', 'POST', {${argPairs.join(', ')}})`);
+        }
       }
       
       // URL format for direct GET requests if applicable
@@ -1364,41 +1487,74 @@ function formatJsonResponse(jsonData, options = {}) {
           return `${argName}=${argValue}`;
         }).join('&');
         
-        console.log(`\n${colors.dim}# URL Format${colors.reset}`);
-        if (data.procedure.static) {
-          console.log(`GET /_rest/${pathStr}:${procName}?${queryParams}`);
+        if (markdownFormat) {
+          printOutput(`\n**URL Format:**`);
+          printOutput(`\`\`\`http`);
+          if (data.procedure.static) {
+            printOutput(`GET /_rest/${pathStr}:${procName}?${queryParams}`);
+          } else {
+            printOutput(`GET /_rest/${pathStr}/\${id}:${procName}?${queryParams}`);
+          }
+          printOutput(`\`\`\``);
         } else {
-          console.log(`GET /_rest/${pathStr}/\${id}:${procName}?${queryParams}`);
+          printOutput(`\n${format(colors.dim, "# URL Format")}`);
+          if (data.procedure.static) {
+            printOutput(`GET /_rest/${pathStr}:${procName}?${queryParams}`);
+          } else {
+            printOutput(`GET /_rest/${pathStr}/\${id}:${procName}?${queryParams}`);
+          }
         }
       }
     }
     
     // Show arguments
     if (data.procedure.args && data.procedure.args.length > 0) {
-      console.log(`\n${colors.bright}Arguments:${colors.reset}`);
-      data.procedure.args.forEach(arg => {
-        let argDesc = `  ${colors.yellow}${arg.name}${colors.reset}`;
-        if (arg.type) {
-          argDesc += ` (${arg.type})`;
-        }
-        if (arg.required) {
-          argDesc += ` ${colors.red}*${colors.reset}`;
-        }
-        console.log(argDesc);
-        
-        // Show argument description if available
-        if (arg.description) {
-          console.log(`    ${colors.dim}${arg.description}${colors.reset}`);
-        }
-      });
+      if (markdownFormat) {
+        printOutput(`\n### Arguments`);
+        data.procedure.args.forEach(arg => {
+          const required = arg.required ? ' (required)' : '';
+          const type = arg.type ? ` - Type: ${arg.type}` : '';
+          printOutput(`- **${arg.name}**${required}${type}`);
+          
+          // Show argument description if available
+          if (arg.description) {
+            printOutput(`  ${arg.description}`);
+          }
+        });
+      } else {
+        printOutput(`\n${format(colors.bright, "Arguments:")}`);
+        data.procedure.args.forEach(arg => {
+          let argDesc = `  ${format(colors.yellow, arg.name)}`;
+          if (arg.type) {
+            argDesc += ` (${arg.type})`;
+          }
+          if (arg.required) {
+            argDesc += ` ${format(colors.red, "*")}`;
+          }
+          printOutput(argDesc);
+          
+          // Show argument description if available
+          if (arg.description) {
+            printOutput(`    ${format(colors.dim, arg.description)}`);
+          }
+        });
+      }
     } else {
-      console.log(`\n${colors.dim}No arguments required${colors.reset}`);
+      if (markdownFormat) {
+        printOutput(`\n**No arguments required**`);
+      } else {
+        printOutput(`\n${format(colors.dim, "No arguments required")}`);
+      }
     }
     
     // Show return description if available
     if (data.procedure.return_description) {
-      console.log(`\n${colors.bright}Returns:${colors.reset}`);
-      console.log(`  ${colors.dim}${data.procedure.return_description}${colors.reset}`);
+      if (markdownFormat) {
+        printOutput(`\n### Returns\n${data.procedure.return_description}`);
+      } else {
+        printOutput(`\n${format(colors.bright, "Returns:")}`);
+        printOutput(`  ${format(colors.dim, data.procedure.return_description)}`);
+      }
     }
     
     return; // For procedures, we're done
@@ -1406,161 +1562,315 @@ function formatJsonResponse(jsonData, options = {}) {
   
   // Display resource info for table-based endpoints
   if (data.table) {
-    console.log(`\n${colors.bright}${colors.blue}Resource Details:${colors.reset}`);
-    console.log(`${colors.cyan}Name:${colors.reset} ${data.table.Name}`);
-    
-    // Count and show fields
-    const fields = Object.keys(data.table.Struct).filter(key => !key.startsWith('_'));
-    console.log(`${colors.cyan}Fields:${colors.reset} ${fields.length} fields`);
-    
-    // Show primary key
-    if (data.table.Struct._primary) {
-      console.log(`${colors.cyan}Primary Key:${colors.reset} ${data.table.Struct._primary.join(', ')}`);
-    }
-    
-    // Show all fields by default
-    const headerText = 'All Fields:';
-    
-    if (fields.length > 0) {
-      // Collect translatable text fields
-      const textFields = {};
-      fields.forEach(field => {
-        if (field.endsWith('_Text__')) {
-          const baseFieldName = field.slice(0, -7); // Remove _Text__ suffix
-          textFields[baseFieldName] = true;
-        }
-      });
+    if (markdownFormat) {
+      printOutput(`\n## Resource Details`);
+      printOutput(`**Name:** ${data.table.Name}`);
       
-      console.log(`\n${colors.bright}${headerText}${colors.reset}`);
-      fields.forEach(field => {
-        const info = data.table.Struct[field];
-        let fieldDesc = `  ${colors.yellow}${field}${colors.reset}`;
-        if (info.type) {
-          fieldDesc += ` (${info.type}`;
-          if (info.size) fieldDesc += `[${info.size}]`;
-          fieldDesc += ')';
-        }
-        if (info.null === false) {
-          fieldDesc += ` ${colors.red}*${colors.reset}`;
-        }
+      // Count and show fields
+      const fields = Object.keys(data.table.Struct).filter(key => !key.startsWith('_'));
+      printOutput(`**Fields:** ${fields.length} fields`);
+      
+      // Show primary key
+      if (data.table.Struct._primary) {
+        printOutput(`**Primary Key:** ${data.table.Struct._primary.join(', ')}`);
+      }
+      
+      // Show all fields by default
+      if (fields.length > 0) {
+        // Collect translatable text fields
+        const textFields = {};
+        fields.forEach(field => {
+          if (field.endsWith('_Text__')) {
+            const baseFieldName = field.slice(0, -7); // Remove _Text__ suffix
+            textFields[baseFieldName] = true;
+          }
+        });
         
-        // Add note for translatable fields
-        if (field.endsWith('_Text__')) {
-          fieldDesc += ` ${colors.dim}(translatable text ID)${colors.reset}`;
-        } else if (textFields[field]) {
-          fieldDesc += ` ${colors.dim}(auto-generated translated text)${colors.reset}`;
-        }
+        printOutput(`\n### Fields`);
+        fields.forEach(field => {
+          const info = data.table.Struct[field];
+          let fieldDesc = `**${field}**`;
+          if (info.type) {
+            fieldDesc += ` (${info.type}`;
+            if (info.size) fieldDesc += `[${info.size}]`;
+            fieldDesc += ')';
+          }
+          if (info.null === false) {
+            fieldDesc += ` *required*`;
+          }
+          
+          // Add note for translatable fields
+          if (field.endsWith('_Text__')) {
+            fieldDesc += ` *(translatable text ID)*`;
+          } else if (textFields[field]) {
+            fieldDesc += ` *(auto-generated translated text)*`;
+          }
+          
+          printOutput(`- ${fieldDesc}`);
+          
+          // Show field description if available
+          if (info.description) {
+            printOutput(`  ${info.description}`);
+          }
+          
+          // For translatable fields, add a note about the auto-generated text field
+          if (field.endsWith('_Text__')) {
+            const baseFieldName = field.slice(0, -7); // Remove _Text__ suffix
+            printOutput(`  Translatable text ID. The translated text will be available in the '${baseFieldName}' field.`);
+          }
+        });
+      }
+    } else {
+      printOutput(`\n${format(colors.bright + colors.blue, "Resource Details:")}`);
+      printOutput(`${format(colors.cyan, "Name:")} ${data.table.Name}`);
+      
+      // Count and show fields
+      const fields = Object.keys(data.table.Struct).filter(key => !key.startsWith('_'));
+      printOutput(`${format(colors.cyan, "Fields:")} ${fields.length} fields`);
+      
+      // Show primary key
+      if (data.table.Struct._primary) {
+        printOutput(`${format(colors.cyan, "Primary Key:")} ${data.table.Struct._primary.join(', ')}`);
+      }
+      
+      // Show all fields by default
+      const headerText = 'All Fields:';
+      
+      if (fields.length > 0) {
+        // Collect translatable text fields
+        const textFields = {};
+        fields.forEach(field => {
+          if (field.endsWith('_Text__')) {
+            const baseFieldName = field.slice(0, -7); // Remove _Text__ suffix
+            textFields[baseFieldName] = true;
+          }
+        });
         
-        console.log(fieldDesc);
-        
-        // Show field description if available
-        if (info.description) {
-          console.log(`    ${colors.dim}${info.description}${colors.reset}`);
-        }
-        
-        // For translatable fields, add a note about the auto-generated text field
-        if (field.endsWith('_Text__')) {
-          const baseFieldName = field.slice(0, -7); // Remove _Text__ suffix
-          console.log(`    ${colors.dim}Translatable text ID. The translated text will be available in the '${baseFieldName}' field.${colors.reset}`);
-        }
-      });
+        printOutput(`\n${format(colors.bright, headerText)}`);
+        fields.forEach(field => {
+          const info = data.table.Struct[field];
+          let fieldDesc = `  ${format(colors.yellow, field)}`;
+          if (info.type) {
+            fieldDesc += ` (${info.type}`;
+            if (info.size) fieldDesc += `[${info.size}]`;
+            fieldDesc += ')';
+          }
+          if (info.null === false) {
+            fieldDesc += ` ${format(colors.red, "*")}`;
+          }
+          
+          // Add note for translatable fields
+          if (field.endsWith('_Text__')) {
+            fieldDesc += ` ${format(colors.dim, "(translatable text ID)")}`;
+          } else if (textFields[field]) {
+            fieldDesc += ` ${format(colors.dim, "(auto-generated translated text)")}`;
+          }
+          
+          printOutput(fieldDesc);
+          
+          // Show field description if available
+          if (info.description) {
+            printOutput(`    ${format(colors.dim, info.description)}`);
+          }
+          
+          // For translatable fields, add a note about the auto-generated text field
+          if (field.endsWith('_Text__')) {
+            const baseFieldName = field.slice(0, -7); // Remove _Text__ suffix
+            printOutput(`    ${format(colors.dim, `Translatable text ID. The translated text will be available in the '${baseFieldName}' field.`)}`);
+          }
+        });
+      }
     }
   }
   
   // Display available functions
   if (data.func && data.func.length > 0) {
-    console.log(`\n${colors.bright}${colors.blue}Available Methods:${colors.reset}`);
-    data.func.forEach(func => {
-      console.log(`  ${colors.green}${func.name}${colors.reset}${func.static ? ' (static)' : ''}`);
-      
-      // Show method description if available
-      if (func.description) {
-        console.log(`    ${colors.dim}${func.description}${colors.reset}`);
-      }
-      
-      if (func.args && func.args.length > 0) {
-        // Always show detailed arguments
-        console.log(`    ${colors.bright}Arguments:${colors.reset}`);
-        func.args.forEach(arg => {
-          let argDesc = `      ${colors.yellow}${arg.name}${colors.reset}`;
-          if (arg.type) {
-            argDesc += ` (${arg.type})`;
-          }
-          if (arg.required) {
-            argDesc += ` ${colors.red}*${colors.reset}`;
-          }
-          console.log(argDesc);
-          
-          // Show description if available
-          if (arg.description) {
-            console.log(`        ${colors.dim}${arg.description}${colors.reset}`);
-          }
-        });
-      }
-      
-      // Show return type and description if available
-      if (func.return_type) {
-        console.log(`    ${colors.dim}Returns: ${func.return_type}${colors.reset}`);
-      }
-      if (func.return_description) {
-        console.log(`    ${colors.dim}Return Description: ${func.return_description}${colors.reset}`);
-      }
-      
-      // Show usage example
-      if (data.Path) {
-        const pathStr = data.Path.join('/');
-        const funcName = func.name;
-        console.log(`    ${colors.bright}Usage:${colors.reset}`);
+    if (markdownFormat) {
+      printOutput(`\n## Available Methods`);
+      data.func.forEach(func => {
+        printOutput(`### ${func.name}${func.static ? ' (static)' : ''}`);
         
-        // Arguments for usage example
-        const args = func.args || [];
-        const argPairs = args.map(arg => {
-          const argName = arg.name;
-          let argValue;
-          
-          // Provide appropriate sample values based on type
-          switch(arg.type) {
-            case 'bool':   argValue = 'true'; break;
-            case 'number': argValue = '123'; break;
-            case 'string': argValue = '"value"'; break;
-            default:       argValue = '"..."'; break;
-          }
-          
-          return `${argName}: ${argValue}`;
-        });
-        
-        if (func.static) {
-          console.log(`    ${colors.dim}klbfw.rest('${pathStr}:${funcName}', 'POST', {${argPairs.join(', ')}})${colors.reset}`);
-        } else {
-          console.log(`    ${colors.dim}klbfw.rest('${pathStr}/\${id}:${funcName}', 'POST', {${argPairs.join(', ')}})${colors.reset}`);
+        // Show method description if available
+        if (func.description) {
+          printOutput(`${func.description}`);
         }
-      }
-      
-      // Add a couple of empty lines between methods for better readability
-      console.log('\n');
-    });
+        
+        if (func.args && func.args.length > 0) {
+          // Always show detailed arguments
+          printOutput(`\n**Arguments:**`);
+          func.args.forEach(arg => {
+            const required = arg.required ? ' (required)' : '';
+            const type = arg.type ? ` - Type: ${arg.type}` : '';
+            printOutput(`- **${arg.name}**${required}${type}`);
+            
+            // Show description if available
+            if (arg.description) {
+              printOutput(`  ${arg.description}`);
+            }
+          });
+        } else {
+          printOutput(`\n*No arguments required*`);
+        }
+        
+        // Show return type and description if available
+        if (func.return_type) {
+          printOutput(`\n**Returns:** ${func.return_type}`);
+        }
+        if (func.return_description) {
+          printOutput(`\n**Return Description:** ${func.return_description}`);
+        }
+        
+        // Show usage example
+        if (data.Path) {
+          const pathStr = data.Path.join('/');
+          const funcName = func.name;
+          printOutput(`\n**Usage:**`);
+          
+          // Arguments for usage example
+          const args = func.args || [];
+          const argPairs = args.map(arg => {
+            const argName = arg.name;
+            let argValue;
+            
+            // Provide appropriate sample values based on type
+            switch(arg.type) {
+              case 'bool':   argValue = 'true'; break;
+              case 'number': argValue = '123'; break;
+              case 'string': argValue = '"value"'; break;
+              default:       argValue = '"..."'; break;
+            }
+            
+            return `${argName}: ${argValue}`;
+          });
+          
+          printOutput(`\`\`\`javascript`);
+          if (func.static) {
+            printOutput(`klbfw.rest('${pathStr}:${funcName}', 'POST', {${argPairs.join(', ')}})`);
+          } else {
+            printOutput(`klbfw.rest('${pathStr}/\${id}:${funcName}', 'POST', {${argPairs.join(', ')}})`);
+          }
+          printOutput(`\`\`\``);
+        }
+        
+        // Add space between methods
+        printOutput(``);
+      });
+    } else {
+      printOutput(`\n${format(colors.bright + colors.blue, "Available Methods:")}`);
+      data.func.forEach(func => {
+        printOutput(`  ${format(colors.green, func.name)}${func.static ? ' (static)' : ''}`);
+        
+        // Show method description if available
+        if (func.description) {
+          printOutput(`    ${format(colors.dim, func.description)}`);
+        }
+        
+        if (func.args && func.args.length > 0) {
+          // Always show detailed arguments
+          printOutput(`    ${format(colors.bright, "Arguments:")}`);
+          func.args.forEach(arg => {
+            let argDesc = `      ${format(colors.yellow, arg.name)}`;
+            if (arg.type) {
+              argDesc += ` (${arg.type})`;
+            }
+            if (arg.required) {
+              argDesc += ` ${format(colors.red, "*")}`;
+            }
+            printOutput(argDesc);
+            
+            // Show description if available
+            if (arg.description) {
+              printOutput(`        ${format(colors.dim, arg.description)}`);
+            }
+          });
+        }
+        
+        // Show return type and description if available
+        if (func.return_type) {
+          printOutput(`    ${format(colors.dim, `Returns: ${func.return_type}`)}`);
+        }
+        if (func.return_description) {
+          printOutput(`    ${format(colors.dim, `Return Description: ${func.return_description}`)}`);
+        }
+        
+        // Show usage example
+        if (data.Path) {
+          const pathStr = data.Path.join('/');
+          const funcName = func.name;
+          printOutput(`    ${format(colors.bright, "Usage:")}`);
+          
+          // Arguments for usage example
+          const args = func.args || [];
+          const argPairs = args.map(arg => {
+            const argName = arg.name;
+            let argValue;
+            
+            // Provide appropriate sample values based on type
+            switch(arg.type) {
+              case 'bool':   argValue = 'true'; break;
+              case 'number': argValue = '123'; break;
+              case 'string': argValue = '"value"'; break;
+              default:       argValue = '"..."'; break;
+            }
+            
+            return `${argName}: ${argValue}`;
+          });
+          
+          if (func.static) {
+            printOutput(`    ${format(colors.dim, `klbfw.rest('${pathStr}:${funcName}', 'POST', {${argPairs.join(', ')}}`)}`);
+          } else {
+            printOutput(`    ${format(colors.dim, `klbfw.rest('${pathStr}/\${id}:${funcName}', 'POST', {${argPairs.join(', ')}}`)}`);
+          }
+        }
+        
+        // Add a couple of empty lines between methods for better readability
+        printOutput(`\n`);
+      });
+    }
   }
   
   // Display available sub-endpoints
   if (data.prefix && data.prefix.length > 0) {
-    console.log(`\n${colors.bright}${colors.blue}Sub-endpoints:${colors.reset}`);
-    
-    // Group by first letter to organize large lists
-    const groups = {};
-    data.prefix.forEach(prefix => {
-      const firstChar = prefix.name.charAt(0).toUpperCase();
-      if (!groups[firstChar]) groups[firstChar] = [];
-      groups[firstChar].push(prefix);
-    });
-    
-    // Display grouped endpoints
-    Object.keys(groups).sort().forEach(letter => {
-      const endpointList = groups[letter].map(endpoint => {
-        return `${colors.green}${endpoint.name}${colors.reset}`;
-      }).join(', ');
+    if (markdownFormat) {
+      printOutput(`\n## Sub-endpoints`);
       
-      console.log(`  ${colors.bright}${letter}${colors.reset}: ${endpointList}`);
-    });
+      // Group by first letter to organize large lists
+      const groups = {};
+      data.prefix.forEach(prefix => {
+        const firstChar = prefix.name.charAt(0).toUpperCase();
+        if (!groups[firstChar]) groups[firstChar] = [];
+        groups[firstChar].push(prefix);
+      });
+      
+      // Display grouped endpoints
+      Object.keys(groups).sort().forEach(letter => {
+        printOutput(`### ${letter}`);
+        const endpointList = groups[letter].map(endpoint => {
+          return `- \`${endpoint.name}\`${endpoint.description ? ` - ${endpoint.description}` : ''}`;
+        }).join('\n');
+        printOutput(endpointList);
+        printOutput(''); // Add space between groups
+      });
+    } else {
+      printOutput(`\n${format(colors.bright + colors.blue, "Sub-endpoints:")}`);
+      
+      // Group by first letter to organize large lists
+      const groups = {};
+      data.prefix.forEach(prefix => {
+        const firstChar = prefix.name.charAt(0).toUpperCase();
+        if (!groups[firstChar]) groups[firstChar] = [];
+        groups[firstChar].push(prefix);
+      });
+      
+      // Display grouped endpoints
+      Object.keys(groups).sort().forEach(letter => {
+        const endpointList = groups[letter].map(endpoint => {
+          return `${format(colors.green, endpoint.name)}`;
+        }).join(', ');
+        
+        printOutput(`  ${format(colors.bright, letter)}: ${endpointList}`);
+      });
+    }
   }
 }
 
@@ -1761,26 +2071,64 @@ async function startMcpServer() {
           const raw = !!args.raw;
           const typescript = !!args.typescript;
           
-          // Use buffer collection pattern
-          let buffer = [];
-          const collect = (text) => {
-            if (text !== undefined && text !== null) {
-              buffer.push(text);
-            }
-          };
+          // Capture the complete API response in a string
+          let outputStr = '';
           
-          // Call API with markdown formatting
-          await describeApi(apiPath, {
-            rawOutput: raw,
-            typeScriptOutput: typescript,
-            output: collect,
-            useColors: false,
-            markdownFormat: true
+          // Create a Promise for collecting the complete response
+          const promise = new Promise((resolve, reject) => {
+            // Create a passthrough stream that captures all output
+            const { PassThrough } = require('stream');
+            const outStream = new PassThrough();
+            
+            // Collect all data written to our stream
+            const dataChunks = [];
+            outStream.on('data', chunk => {
+              dataChunks.push(chunk);
+            });
+            
+            // When the stream ends, combine all chunks and resolve the promise
+            outStream.on('end', () => {
+              outputStr = Buffer.concat(dataChunks).toString('utf8');
+              resolve();
+            });
+            
+            // If there's an error, reject the promise
+            outStream.on('error', err => {
+              reject(err);
+            });
+            
+            // Create a special collector that writes to both our stream and the collect array
+            const collect = text => {
+              if (text !== undefined && text !== null) {
+                outStream.write(text + '\n');
+              }
+            };
+            
+            // Call API with the stream collector
+            describeApi(apiPath, {
+              rawOutput: raw,
+              typeScriptOutput: typescript,
+              output: collect,
+              useColors: false,
+              markdownFormat: true
+            })
+            .then(() => {
+              outStream.end(); // End the stream when API call is done
+            })
+            .catch(err => {
+              reject(err);
+            });
           });
           
-          // Return collected output
+          // Wait for the complete output to be collected
+          await promise;
+          
+          // Return the full output with all content
           return {
-            content: [{ type: "text", text: buffer.join('\n') || "No output" }]
+            content: [{ 
+              type: "text", 
+              text: outputStr || "## API Description\n\nNo output received from API endpoint." 
+            }]
           };
         } catch (err) {
           console.error(`MCP describe error:`, err);
@@ -1797,25 +2145,63 @@ async function startMcpServer() {
           const apiPath = args.apiPath || '';
           const raw = !!args.raw;
           
-          // Use buffer collection pattern
-          let buffer = [];
-          const collect = (text) => {
-            if (text !== undefined && text !== null) {
-              buffer.push(text);
-            }
-          };
+          // Capture the complete API response in a string
+          let outputStr = '';
           
-          // Call API with markdown formatting
-          await getApiResource(apiPath, {
-            rawOutput: raw,
-            output: collect,
-            useColors: false,
-            markdownFormat: true
+          // Create a Promise for collecting the complete response
+          const promise = new Promise((resolve, reject) => {
+            // Create a passthrough stream that captures all output
+            const { PassThrough } = require('stream');
+            const outStream = new PassThrough();
+            
+            // Collect all data written to our stream
+            const dataChunks = [];
+            outStream.on('data', chunk => {
+              dataChunks.push(chunk);
+            });
+            
+            // When the stream ends, combine all chunks and resolve the promise
+            outStream.on('end', () => {
+              outputStr = Buffer.concat(dataChunks).toString('utf8');
+              resolve();
+            });
+            
+            // If there's an error, reject the promise
+            outStream.on('error', err => {
+              reject(err);
+            });
+            
+            // Create a special collector that writes to our stream
+            const collect = text => {
+              if (text !== undefined && text !== null) {
+                outStream.write(text + '\n');
+              }
+            };
+            
+            // Call API with the stream collector
+            getApiResource(apiPath, {
+              rawOutput: raw,
+              output: collect,
+              useColors: false,
+              markdownFormat: true
+            })
+            .then(() => {
+              outStream.end(); // End the stream when API call is done
+            })
+            .catch(err => {
+              reject(err);
+            });
           });
           
-          // Return collected output
+          // Wait for the complete output to be collected
+          await promise;
+          
+          // Return the full output with all content
           return {
-            content: [{ type: "text", text: buffer.join('\n') || "No output" }]
+            content: [{ 
+              type: "text", 
+              text: outputStr || "## API Resource\n\nNo output received from API endpoint." 
+            }]
           };
         } catch (err) {
           console.error(`MCP get error:`, err);
@@ -1829,24 +2215,62 @@ async function startMcpServer() {
       // List available objects
       listObjects: async () => {
         try {
-          // Use buffer collection pattern
-          let buffer = [];
-          const collect = (text) => {
-            if (text !== undefined && text !== null) {
-              buffer.push(text);
-            }
-          };
+          // Capture the complete API response in a string
+          let outputStr = '';
           
-          // Call API with markdown formatting
-          await describeRootObjects({ 
-            output: collect,
-            useColors: false,
-            markdownFormat: true
+          // Create a Promise for collecting the complete response
+          const promise = new Promise((resolve, reject) => {
+            // Create a passthrough stream that captures all output
+            const { PassThrough } = require('stream');
+            const outStream = new PassThrough();
+            
+            // Collect all data written to our stream
+            const dataChunks = [];
+            outStream.on('data', chunk => {
+              dataChunks.push(chunk);
+            });
+            
+            // When the stream ends, combine all chunks and resolve the promise
+            outStream.on('end', () => {
+              outputStr = Buffer.concat(dataChunks).toString('utf8');
+              resolve();
+            });
+            
+            // If there's an error, reject the promise
+            outStream.on('error', err => {
+              reject(err);
+            });
+            
+            // Create a special collector that writes to our stream
+            const collect = text => {
+              if (text !== undefined && text !== null) {
+                outStream.write(text + '\n');
+              }
+            };
+            
+            // Call API with the stream collector
+            describeRootObjects({ 
+              output: collect,
+              useColors: false,
+              markdownFormat: true
+            })
+            .then(() => {
+              outStream.end(); // End the stream when API call is done
+            })
+            .catch(err => {
+              reject(err);
+            });
           });
           
-          // Return collected output
+          // Wait for the complete output to be collected
+          await promise;
+          
+          // Return the full output with all content
           return {
-            content: [{ type: "text", text: buffer.join('\n') || "## Available API Objects\n\nNo API objects found." }]
+            content: [{ 
+              type: "text", 
+              text: outputStr || "## Available API Objects\n\nNo API objects found." 
+            }]
           };
         } catch (err) {
           console.error(`MCP listObjects error:`, err);
@@ -1862,24 +2286,62 @@ async function startMcpServer() {
         try {
           const fileName = args.fileName || 'README.md';
           
-          // Use buffer collection pattern
-          let buffer = [];
-          const collect = (text) => {
-            if (text !== undefined && text !== null) {
-              buffer.push(text);
-            }
-          };
+          // Capture the complete documentation response in a string
+          let outputStr = '';
           
-          // Call API with markdown formatting
-          await fetchDocumentation(fileName, {
-            output: collect,
-            useColors: false,
-            markdownFormat: true
+          // Create a Promise for collecting the complete response
+          const promise = new Promise((resolve, reject) => {
+            // Create a passthrough stream that captures all output
+            const { PassThrough } = require('stream');
+            const outStream = new PassThrough();
+            
+            // Collect all data written to our stream
+            const dataChunks = [];
+            outStream.on('data', chunk => {
+              dataChunks.push(chunk);
+            });
+            
+            // When the stream ends, combine all chunks and resolve the promise
+            outStream.on('end', () => {
+              outputStr = Buffer.concat(dataChunks).toString('utf8');
+              resolve();
+            });
+            
+            // If there's an error, reject the promise
+            outStream.on('error', err => {
+              reject(err);
+            });
+            
+            // Create a special collector that writes to our stream
+            const collect = text => {
+              if (text !== undefined && text !== null) {
+                outStream.write(text + '\n');
+              }
+            };
+            
+            // Call API with the stream collector
+            fetchDocumentation(fileName, {
+              output: collect,
+              useColors: false,
+              markdownFormat: true
+            })
+            .then(() => {
+              outStream.end(); // End the stream when API call is done
+            })
+            .catch(err => {
+              reject(err);
+            });
           });
           
-          // Return collected output
+          // Wait for the complete output to be collected
+          await promise;
+          
+          // Return the full output with all content
           return {
-            content: [{ type: "text", text: buffer.join('\n') || "No documentation found" }]
+            content: [{ 
+              type: "text", 
+              text: outputStr || "## Documentation\n\nNo documentation found." 
+            }]
           };
         } catch (err) {
           console.error(`MCP doc error:`, err);
