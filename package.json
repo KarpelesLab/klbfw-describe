@@ -3,7 +3,7 @@
   "version": "0.5.9",
   "description": "CLI tool to explore and document KLB API endpoints",
   "main": "index.js",
-  "type": "commonjs",
+  "type": "module",
   "bin": {
     "klbfw-describe": "index.js"
   },
