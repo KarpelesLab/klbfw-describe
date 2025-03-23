@@ -1,4 +1,5 @@
 import { describeApi, getApiResource, fetchDocumentation } from './api.js';
+import { startMcpServer } from './mcp.js';
 
 /**
  * Process command-line arguments and execute appropriate function
@@ -41,8 +42,8 @@ export async function processArguments(args) {
   
   // Start MCP server if requested
   if (mcpMode) {
-    console.error('MCP mode is temporarily disabled in this refactored version');
-    return;
+    startMcpServer();
+    return; // MCP server handles its own lifecycle
   }
   
   try {

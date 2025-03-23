@@ -1,35 +1,28 @@
-import { MCP } from '../node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js';
-import * as zod from 'zod';
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
 import { describeApi, getApiResource, fetchDocumentation } from './api.js';
 
 /**
  * Start an MCP server for programmatic access to the API description tool
  */
 export function startMcpServer() {
-  // Create MCP instance
-  const mcp = new MCP();
-  
-  // Define schemas for input validation
-  const describeSchema = zod.object({
-    apiPath: zod.string().min(1),
-    raw: zod.boolean().optional().default(false),
-    typescriptOutput: zod.boolean().optional().default(false)
+  // Create MCP server with stdio transport
+  const server = new McpServer({
+    name: "klbfw-describe",
+    version: "0.5.9",
+    displayName: "KLB API Describe Tool"
   });
   
-  const getSchema = zod.object({
-    apiPath: zod.string().min(1),
-    raw: zod.boolean().optional().default(false)
-  });
-  
-  const documentationSchema = zod.object({
-    fileName: zod.string().optional().default('README.md')
-  });
-  
-  // Register API methods
-  mcp.registerMethod({
-    name: 'describe',
-    description: 'Describe an API endpoint',
-    parameters: describeSchema,
+  // Register tools
+  server.registerTool({
+    name: "describe",
+    description: "Describe an API endpoint",
+    parameters: z.object({
+      apiPath: z.string().min(1).describe("The API endpoint path to describe"),
+      raw: z.boolean().optional().default(false).describe("Whether to show raw JSON output"),
+      typescriptOutput: z.boolean().optional().default(false).describe("Whether to generate TypeScript definitions")
+    }),
     handler: async (params) => {
       let output = '';
       const appendOutput = (text) => {
@@ -48,10 +41,13 @@ export function startMcpServer() {
     }
   });
   
-  mcp.registerMethod({
-    name: 'get',
-    description: 'Perform a GET request to an API endpoint',
-    parameters: getSchema,
+  server.registerTool({
+    name: "get",
+    description: "Perform a GET request to an API endpoint",
+    parameters: z.object({
+      apiPath: z.string().min(1).describe("The API endpoint path to request"),
+      raw: z.boolean().optional().default(false).describe("Whether to show raw JSON output")
+    }),
     handler: async (params) => {
       let output = '';
       const appendOutput = (text) => {
@@ -69,10 +65,12 @@ export function startMcpServer() {
     }
   });
   
-  mcp.registerMethod({
-    name: 'documentation',
-    description: 'Fetch documentation from GitHub repository',
-    parameters: documentationSchema,
+  server.registerTool({
+    name: "documentation",
+    description: "Fetch documentation from GitHub repository",
+    parameters: z.object({
+      fileName: z.string().optional().default('README.md').describe("The documentation file to fetch")
+    }),
     handler: async (params) => {
       let output = '';
       const appendOutput = (text) => {
@@ -89,11 +87,9 @@ export function startMcpServer() {
     }
   });
   
-  // Start the MCP server
-  mcp.listen({
-    input: process.stdin,
-    output: process.stdout
-  });
+  // Start the MCP server with stdio transport
+  const transport = new StdioServerTransport();
+  server.listen(transport);
   
-  return mcp;
+  return server;
 }
