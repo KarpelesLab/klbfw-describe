@@ -1740,64 +1740,28 @@ try {
  * This implements a basic JSON-RPC server for programmatic access to the
  * API description functionality. It handles requests in the MCP format.
  * 
- * In MCP mode, we avoid printing any output to the console, and instead
- * only send JSON-RPC responses back to the client via stdout.
+ * In MCP mode, JSON-RPC responses are sent directly to stdout with no other output.
  */
 async function startMcpServer() {
-  // In MCP mode, we want to avoid printing anything to the console
-  // Backup the console methods
-  const originalConsoleLog = console.log;
-  const originalConsoleError = console.error;
-  const originalConsoleWarn = console.warn;
-  const originalConsoleInfo = console.info;
-  
-  // Silence console output except for errors (which are useful for debugging)
+  // Silence console.log by replacing it with a no-op function
+  // Save the original console methods
+  const originalLog = console.log;
   console.log = () => {};
-  console.warn = () => {};
-  console.info = () => {};
-  // Keep error logging for debugging but prepend with MCP tag
-  console.error = (...args) => {
-    originalConsoleError("MCP_DEBUG:", ...args);
-  };
   
-  // We only print this message during startup
-  originalConsoleLog(`${colors.bright}${colors.blue}Starting MCP server...${colors.reset}`);
-  originalConsoleLog(`${colors.dim}MCP server started on stdio. Waiting for commands...${colors.reset}`);
+  // Log to stderr for debug only
+  console.error(`Starting MCP server on stdio...`);
   
   try {
-    // Create output collectors for our APIs
-    const bufferOutput = async (fn, args) => {
-      // Create a buffer to collect output
-      let buffer = [];
-      
-      // Create a collecting function
-      const collect = (text) => {
-        if (text !== undefined && text !== null) {
-          buffer.push(text);
-        }
-      };
-      
-      // Call the function with our collector
-      await fn(args, {
-        output: collect,
-        useColors: false,
-        markdownFormat: true
-      });
-      
-      // Return the collected output
-      return buffer.join('\n');
-    };
-    
-    // Define our available tools and their handlers
+    // Define our available tool handlers
     const tools = {
       // Describe API endpoint
       describe: async (args) => {
         try {
-          const apiPath = args.apiPath;
-          const raw = args.raw || false;
-          const typescript = args.typescript || false;
+          const apiPath = args.apiPath || '';
+          const raw = !!args.raw;
+          const typescript = !!args.typescript;
           
-          // Create a buffer to collect output
+          // Use buffer collection pattern
           let buffer = [];
           const collect = (text) => {
             if (text !== undefined && text !== null) {
@@ -1805,7 +1769,7 @@ async function startMcpServer() {
             }
           };
           
-          // Call the API description function with all options
+          // Call API with markdown formatting
           await describeApi(apiPath, {
             rawOutput: raw,
             typeScriptOutput: typescript,
@@ -1814,24 +1778,26 @@ async function startMcpServer() {
             markdownFormat: true
           });
           
+          // Return collected output
           return {
-            content: [{ type: "text", text: buffer.join('\n') }]
+            content: [{ type: "text", text: buffer.join('\n') || "No output" }]
           };
         } catch (err) {
+          console.error(`MCP describe error:`, err);
           return {
-            content: [{ type: "text", text: `## Error\n${err.message}` }],
+            content: [{ type: "text", text: `## Error: ${err.message}` }],
             isError: true
           };
         }
       },
       
-      // GET request
+      // GET request handler
       get: async (args) => {
         try {
-          const apiPath = args.apiPath;
-          const raw = args.raw || false;
+          const apiPath = args.apiPath || '';
+          const raw = !!args.raw;
           
-          // Create a buffer to collect output
+          // Use buffer collection pattern
           let buffer = [];
           const collect = (text) => {
             if (text !== undefined && text !== null) {
@@ -1839,7 +1805,7 @@ async function startMcpServer() {
             }
           };
           
-          // Call the API description function with all options
+          // Call API with markdown formatting
           await getApiResource(apiPath, {
             rawOutput: raw,
             output: collect,
@@ -1847,21 +1813,23 @@ async function startMcpServer() {
             markdownFormat: true
           });
           
+          // Return collected output
           return {
-            content: [{ type: "text", text: buffer.join('\n') }]
+            content: [{ type: "text", text: buffer.join('\n') || "No output" }]
           };
         } catch (err) {
+          console.error(`MCP get error:`, err);
           return {
-            content: [{ type: "text", text: `## Error\n${err.message}` }],
+            content: [{ type: "text", text: `## Error: ${err.message}` }],
             isError: true
           };
         }
       },
       
-      // List objects
+      // List available objects
       listObjects: async () => {
         try {
-          // For the listObjects method, we need a special handler since it doesn't take arguments
+          // Use buffer collection pattern
           let buffer = [];
           const collect = (text) => {
             if (text !== undefined && text !== null) {
@@ -1869,18 +1837,21 @@ async function startMcpServer() {
             }
           };
           
+          // Call API with markdown formatting
           await describeRootObjects({ 
             output: collect,
             useColors: false,
             markdownFormat: true
           });
           
+          // Return collected output
           return {
             content: [{ type: "text", text: buffer.join('\n') || "## Available API Objects\n\nNo API objects found." }]
           };
         } catch (err) {
+          console.error(`MCP listObjects error:`, err);
           return {
-            content: [{ type: "text", text: `## Error\n${err.message}` }],
+            content: [{ type: "text", text: `## Error: ${err.message}` }],
             isError: true
           };
         }
@@ -1890,139 +1861,138 @@ async function startMcpServer() {
       doc: async (args) => {
         try {
           const fileName = args.fileName || 'README.md';
-          const output = await bufferOutput(fetchDocumentation, fileName);
+          
+          // Use buffer collection pattern
+          let buffer = [];
+          const collect = (text) => {
+            if (text !== undefined && text !== null) {
+              buffer.push(text);
+            }
+          };
+          
+          // Call API with markdown formatting
+          await fetchDocumentation(fileName, {
+            output: collect,
+            useColors: false,
+            markdownFormat: true
+          });
+          
+          // Return collected output
           return {
-            content: [{ type: "text", text: output }]
+            content: [{ type: "text", text: buffer.join('\n') || "No documentation found" }]
           };
         } catch (err) {
+          console.error(`MCP doc error:`, err);
           return {
-            content: [{ type: "text", text: `## Error\n${err.message}` }],
+            content: [{ type: "text", text: `## Error: ${err.message}` }],
             isError: true
           };
         }
       }
     };
     
-    // Start listening for JSON-RPC requests on stdin
-    process.stdin.setEncoding('utf8');
-    
-    // Listen for JSON-RPC requests
-    process.stdin.on('data', async (data) => {
-      try {
-        // Parse the JSON-RPC request
-        const request = JSON.parse(data);
-        
-        // Check if it's a valid JSON-RPC request
-        if (request.jsonrpc !== '2.0' || !request.id || !request.method) {
-          const error = {
-            jsonrpc: '2.0',
-            id: request.id || null,
-            error: {
-              code: -32600,
-              message: 'Invalid Request'
-            }
-          };
-          process.stdout.write(JSON.stringify(error) + '\n');
-          return;
-        }
-        
-        // Handle tools/call method
-        if (request.method === 'tools/call') {
-          const toolName = request.params.name;
-          const toolArgs = request.params.arguments;
+    // Create a stream transformer to handle stdin/stdout for MCP
+    class McpHandler {
+      constructor() {
+        // Set up stdin
+        process.stdin.setEncoding('utf8');
+        process.stdin.on('data', this.handleRequest.bind(this));
+        process.stdin.resume();
+      }
+      
+      // Handle incoming JSON-RPC requests
+      async handleRequest(data) {
+        try {
+          // Parse the JSON-RPC request
+          const request = JSON.parse(data);
           
-          // Check if the tool exists
-          if (!tools[toolName]) {
-            const error = {
-              jsonrpc: '2.0',
-              id: request.id,
-              error: {
-                code: -32601,
-                message: 'Method not found'
-              }
-            };
-            process.stdout.write(JSON.stringify(error) + '\n');
+          // Check for valid JSON-RPC format
+          if (request.jsonrpc !== '2.0' || !request.id) {
+            this.sendError(request.id, -32600, 'Invalid Request');
             return;
           }
           
-          try {
-            // Call the tool handler
-            const result = await tools[toolName](toolArgs);
+          // Handle the MCP tool call method
+          if (request.method === 'tools/call' && request.params) {
+            const toolName = request.params.name;
+            const toolArgs = request.params.arguments || {};
             
-            // Send the response
-            const response = {
-              jsonrpc: '2.0',
-              id: request.id,
-              result: result
-            };
-            process.stdout.write(JSON.stringify(response) + '\n');
-          } catch (err) {
-            // Handle tool execution error
-            const error = {
-              jsonrpc: '2.0',
-              id: request.id,
-              error: {
-                code: -32000,
-                message: err.message
-              }
-            };
-            process.stdout.write(JSON.stringify(error) + '\n');
-          }
-        } else {
-          // Method not supported
-          const error = {
-            jsonrpc: '2.0',
-            id: request.id,
-            error: {
-              code: -32601,
-              message: 'Method not found'
+            // Check if the requested tool exists
+            if (!tools[toolName]) {
+              this.sendError(request.id, -32601, `Tool '${toolName}' not found`);
+              return;
             }
-          };
-          process.stdout.write(JSON.stringify(error) + '\n');
+            
+            try {
+              // Execute the tool handler
+              const result = await tools[toolName](toolArgs);
+              
+              // Send the successful response
+              this.sendResult(request.id, result);
+            } catch (err) {
+              // Handle tool execution error
+              this.sendError(request.id, -32000, `Tool execution error: ${err.message}`);
+            }
+          } else {
+            // Unsupported method
+            this.sendError(request.id, -32601, `Method '${request.method}' not found`);
+          }
+        } catch (err) {
+          // Handle JSON parse errors
+          this.sendError(null, -32700, 'Parse error');
         }
-      } catch (err) {
-        // Handle parse error
-        const error = {
+      }
+      
+      // Send a JSON-RPC result response
+      sendResult(id, result) {
+        const response = {
           jsonrpc: '2.0',
-          id: null,
+          id: id,
+          result: result
+        };
+        process.stdout.write(JSON.stringify(response) + '\n');
+      }
+      
+      // Send a JSON-RPC error response
+      sendError(id, code, message) {
+        const response = {
+          jsonrpc: '2.0',
+          id: id,
           error: {
-            code: -32700,
-            message: 'Parse error'
+            code: code,
+            message: message
           }
         };
-        process.stdout.write(JSON.stringify(error) + '\n');
+        process.stdout.write(JSON.stringify(response) + '\n');
       }
-    });
+    }
     
-    // Keep the process running
-    process.stdin.resume();
+    // Start the MCP handler
+    new McpHandler();
+    
   } catch (err) {
-    // Log the error for debugging but don't show to the user
+    // Log initialization errors to stderr
     console.error(`Error starting MCP server: ${err.message}`);
     console.error(`Stack: ${err.stack}`);
     
-    // Create a JSON-RPC error response for the client
+    // Send an initialization error response
     const errorResponse = {
       jsonrpc: '2.0',
       id: null,
       error: {
-        code: -32000,
+        code: -32099,
         message: `Server initialization error: ${err.message}`
       }
     };
     
-    // Send the error to stdout and exit
+    // Write error and exit
     process.stdout.write(JSON.stringify(errorResponse) + '\n');
     process.exit(1);
-  } finally {
-    // Restore console functions if the server is stopped
-    // This is unlikely to execute since the server is designed to run until process exit
-    console.log = originalConsoleLog;
-    console.error = originalConsoleError;
-    console.warn = originalConsoleWarn;
-    console.info = originalConsoleInfo;
   }
 }
+
+// Global flag to indicate if MCP mode is active
+let mcpMode = false;
 
 // Parse command line arguments
 let rawOutput = false;
@@ -2030,7 +2000,6 @@ let typeScriptOutput = false;
 let getRequest = false;
 let docMode = false;
 let docFileName = 'README.md';
-let mcpMode = false;
 let apiPath = null;
 
 const args = process.argv.slice(2);
