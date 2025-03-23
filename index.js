@@ -15,6 +15,7 @@
  *   --raw          Show raw JSON output without formatting
  *   --ts, --types  Generate TypeScript type definitions
  *   --get          Perform a GET request instead of OPTIONS
+ *   --doc [file]   Fetch documentation from GitHub (default: README.md)
  *   --mcp          Start an MCP server on stdio for programmatic access
  * 
  * Examples:
@@ -24,6 +25,8 @@
  *   npx @karpeleslab/klbfw-describe --raw User
  *   npx @karpeleslab/klbfw-describe --ts User
  *   npx @karpeleslab/klbfw-describe --get User/ce8b57ca-8961-49c5-863a-b79ab3e1e4a0
+ *   npx @karpeleslab/klbfw-describe --doc
+ *   npx @karpeleslab/klbfw-describe --doc apibasics.md
  *   npx @karpeleslab/klbfw-describe --mcp
  */
 
@@ -33,6 +36,9 @@ const url = require('url');
 // Default API host
 const DEFAULT_API_HOST = 'ws.atonline.com';
 const API_PREFIX = '/_rest/';
+
+// GitHub documentation repo URL
+const DOC_REPO_URL = 'https://raw.githubusercontent.com/KarpelesLab/integration-docs/refs/heads/master/';
 
 // ANSI colors for terminal output
 const colors = {
@@ -125,6 +131,89 @@ function describeApi(apiPath, options = {}) {
   });
   
   req.end();
+}
+
+/**
+ * Fetch and display documentation from GitHub repository
+ */
+function fetchDocumentation(fileName = 'README.md') {
+  const docUrl = url.parse(`${DOC_REPO_URL}${fileName}`);
+  
+  console.log(`\n${colors.bright}${colors.blue}Fetching documentation:${colors.reset} ${colors.green}${fileName}${colors.reset}`);
+  console.log(`${colors.dim}Source: ${DOC_REPO_URL}${fileName}${colors.reset}\n`);
+  
+  const reqOptions = {
+    hostname: docUrl.hostname,
+    path: docUrl.pathname,
+    method: 'GET',
+    headers: {
+      'Accept': 'text/plain, text/markdown'
+    }
+  };
+  
+  const req = https.request(reqOptions, (res) => {
+    let data = '';
+    
+    res.on('data', (chunk) => {
+      data += chunk;
+    });
+    
+    res.on('end', () => {
+      if (res.statusCode !== 200) {
+        console.log(`${colors.bright}Status:${colors.reset} ${colors.red}${res.statusCode}${colors.reset}`);
+        console.log(`${colors.red}Error: Unable to fetch documentation${colors.reset}`);
+        return;
+      }
+      
+      // Display the markdown content
+      console.log(`${colors.bright}${colors.blue}Documentation:${colors.reset}\n`);
+      
+      // Apply some basic Markdown formatting
+      const formattedText = formatMarkdown(data);
+      console.log(formattedText);
+    });
+  });
+  
+  req.on('error', (e) => {
+    console.error(`${colors.red}Error:${colors.reset} ${e.message}`);
+  });
+  
+  req.end();
+}
+
+/**
+ * Basic Markdown formatting for terminal display
+ */
+function formatMarkdown(markdown) {
+  let formatted = markdown;
+  
+  // Headers
+  formatted = formatted.replace(/^# (.*?)$/gm, `${colors.bright}${colors.blue}$1${colors.reset}`);
+  formatted = formatted.replace(/^## (.*?)$/gm, `${colors.bright}${colors.cyan}$1${colors.reset}`);
+  formatted = formatted.replace(/^### (.*?)$/gm, `${colors.bright}${colors.green}$1${colors.reset}`);
+  formatted = formatted.replace(/^#### (.*?)$/gm, `${colors.bright}${colors.yellow}$1${colors.reset}`);
+  
+  // Bold and italics
+  formatted = formatted.replace(/\*\*(.*?)\*\*/g, `${colors.bright}$1${colors.reset}`);
+  formatted = formatted.replace(/\*(.*?)\*/g, `${colors.underscore}$1${colors.reset}`);
+  
+  // Code blocks
+  formatted = formatted.replace(/```([^`]+)```/g, (match, code) => {
+    return `\n${colors.dim}${code}${colors.reset}\n`;
+  });
+  
+  // Inline code
+  formatted = formatted.replace(/`([^`]+)`/g, `${colors.dim}$1${colors.reset}`);
+  
+  // Links - display link text and URL
+  formatted = formatted.replace(/\[(.*?)\]\((.*?)\)/g, `${colors.underscore}$1${colors.reset} (${colors.cyan}$2${colors.reset})`);
+  
+  // Lists
+  formatted = formatted.replace(/^- (.*?)$/gm, `  • $1`);
+  formatted = formatted.replace(/^  - (.*?)$/gm, `    • $1`);
+  formatted = formatted.replace(/^\d+\. (.*?)$/gm, `  $&`);
+  
+  return formatted;
 }
 
 /**
@@ -1263,6 +1352,7 @@ function printUsage() {
   console.log(`  --raw              Show raw JSON output without formatting`);
   console.log(`  --ts, --types      Generate TypeScript type definitions`);
   console.log(`  --get              Perform a GET request instead of OPTIONS`);
+  console.log(`  --doc [file]       Fetch documentation from GitHub (default: README.md)`);
   console.log(`  --mcp              Start an MCP server on stdio for programmatic access`);
   console.log(`  --help, -h         Show this help message`);
   console.log(`\n${colors.bright}Examples:${colors.reset}`);
@@ -1272,6 +1362,8 @@ function printUsage() {
   console.log(`  npx @karpeleslab/klbfw-describe --raw User`);
   console.log(`  npx @karpeleslab/klbfw-describe --ts User`);
   console.log(`  npx @karpeleslab/klbfw-describe --get User/12345`);
+  console.log(`  npx @karpeleslab/klbfw-describe --doc`);
+  console.log(`  npx @karpeleslab/klbfw-describe --doc apibasics.md`);
   console.log(`  npx @karpeleslab/klbfw-describe --mcp`);
 }
 
@@ -1299,7 +1391,7 @@ async function startMcpServer() {
     // Create an MCP server
     const server = new McpServerClass({
       name: "klbfw-describe",
-      version: "0.5.2"
+      version: "0.5.3"
     });
     
     // Add the describe tool
@@ -1309,6 +1401,7 @@ async function startMcpServer() {
         raw: z.boolean().optional().describe('Show raw JSON output without formatting'),
         typescript: z.boolean().optional().describe('Generate TypeScript type definitions')
       },
+      "Describe an API endpoint's capabilities and structure",
       async ({ apiPath, raw = false, typescript = false }) => {
         const output = await captureOutput((done) => {
           describeApi(apiPath, { 
@@ -1333,6 +1426,7 @@ async function startMcpServer() {
         apiPath: z.string().describe('The API path to request'),
         raw: z.boolean().optional().describe('Show raw JSON output without formatting')
       },
+      "Perform a GET request on an API endpoint to retrieve data",
       async ({ apiPath, raw = false }) => {
         const output = await captureOutput((done) => {
           getApiResource(apiPath, { 
@@ -1353,9 +1447,32 @@ async function startMcpServer() {
     // Add the listObjects tool
     server.tool("listObjects", 
       {},
+      "List available top-level API objects in the KLB API",
       async () => {
         const output = await captureOutput((done) => {
           describeRootObjects(true); // Silent mode
+          
+          // Give time for async operations to complete
+          setTimeout(done, 1000);
+        });
+        
+        return {
+          content: [{ type: "text", text: output }]
+        };
+      }
+    );
+    
+    // Add the doc tool
+    server.tool("doc",
+      {
+        fileName: z.string().optional().describe('Documentation file to fetch (default: README.md)')
+      },
+      "Access reference documentation for KLB API integration",
+      async ({ fileName = 'README.md' }) => {
+        const output = await captureOutput((done) => {
+          fetchDocumentation(fileName, {
+            silent: true // Don't directly output to console
+          });
           
           // Give time for async operations to complete
           setTimeout(done, 1000);
@@ -1407,6 +1524,8 @@ async function startMcpServer() {
 let rawOutput = false;
 let typeScriptOutput = false;
 let getRequest = false;
+let docMode = false;
+let docFileName = 'README.md';
 let mcpMode = false;
 let apiPath = null;
 
@@ -1420,6 +1539,13 @@ for (let i = 0; i < args.length; i++) {
     typeScriptOutput = true;
   } else if (arg === '--get') {
     getRequest = true;
+  } else if (arg === '--doc') {
+    docMode = true;
+    // Check if there's a filename specified after --doc
+    if (i + 1 < args.length && !args[i + 1].startsWith('--')) {
+      docFileName = args[i + 1];
+      i++; // Skip the next argument as we've already processed it
+    }
   } else if (arg === '--mcp') {
     mcpMode = true;
   } else if (arg === '--help' || arg === '-h') {
@@ -1463,12 +1589,26 @@ describeRootObjects = function(silent = false) {
   return originalDescribeRootObjects();
 };
 
+const originalFetchDocumentation = fetchDocumentation;
+fetchDocumentation = function(fileName = 'README.md', options = {}) {
+  const { silent = false } = options;
+  if (!silent) {
+    return originalFetchDocumentation(fileName);
+  }
+  
+  // If silent mode, the function will run but output will be captured by the MCP handler
+  return originalFetchDocumentation(fileName);
+};
+
 // Execute in the appropriate mode
 if (mcpMode) {
   // Need to use top-level await for ESM import
   (async () => {
     await startMcpServer();
   })();
+} else if (docMode) {
+  // Fetch documentation from GitHub
+  fetchDocumentation(docFileName);
 } else if (!apiPath) {
   printUsage();
   console.log('\n' + colors.bright + 'Retrieving available API objects...' + colors.reset);

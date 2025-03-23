@@ -1,0 +1,56 @@
+{
+  "mcpServers": {
+    "klbfw-describe": {
+      "command": "node index.js --mcp",
+      "tools": [
+        {
+          "name": "klbfw-describe__describe",
+          "description": "Describe an API endpoint's capabilities and structure",
+          "parameters": {
+            "apiPath": {
+              "type": "string",
+              "description": "The API path to describe"
+            },
+            "raw": {
+              "type": "boolean",
+              "description": "Show raw JSON output without formatting"
+            },
+            "typescript": {
+              "type": "boolean", 
+              "description": "Generate TypeScript type definitions"
+            }
+          }
+        },
+        {
+          "name": "klbfw-describe__get",
+          "description": "Perform a GET request on an API endpoint to retrieve data",
+          "parameters": {
+            "apiPath": {
+              "type": "string",
+              "description": "The API path to request"
+            },
+            "raw": {
+              "type": "boolean",
+              "description": "Show raw JSON output without formatting"
+            }
+          }
+        },
+        {
+          "name": "klbfw-describe__listObjects",
+          "description": "List available top-level API objects in the KLB API",
+          "parameters": {}
+        },
+        {
+          "name": "klbfw-describe__doc",
+          "description": "Access reference documentation for KLB API integration",
+          "parameters": {
+            "fileName": {
+              "type": "string",
+              "description": "Documentation file to fetch (default: README.md)"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
