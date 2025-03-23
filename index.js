@@ -1739,9 +1739,30 @@ try {
  * 
  * This implements a basic JSON-RPC server for programmatic access to the
  * API description functionality. It handles requests in the MCP format.
+ * 
+ * In MCP mode, we avoid printing any output to the console, and instead
+ * only send JSON-RPC responses back to the client via stdout.
  */
 async function startMcpServer() {
-  console.log(`${colors.bright}${colors.blue}Starting MCP server...${colors.reset}`);
+  // In MCP mode, we want to avoid printing anything to the console
+  // Backup the console methods
+  const originalConsoleLog = console.log;
+  const originalConsoleError = console.error;
+  const originalConsoleWarn = console.warn;
+  const originalConsoleInfo = console.info;
+  
+  // Silence console output except for errors (which are useful for debugging)
+  console.log = () => {};
+  console.warn = () => {};
+  console.info = () => {};
+  // Keep error logging for debugging but prepend with MCP tag
+  console.error = (...args) => {
+    originalConsoleError("MCP_DEBUG:", ...args);
+  };
+  
+  // We only print this message during startup
+  originalConsoleLog(`${colors.bright}${colors.blue}Starting MCP server...${colors.reset}`);
+  originalConsoleLog(`${colors.dim}MCP server started on stdio. Waiting for commands...${colors.reset}`);
   
   try {
     // Create output collectors for our APIs
@@ -1885,8 +1906,6 @@ async function startMcpServer() {
     // Start listening for JSON-RPC requests on stdin
     process.stdin.setEncoding('utf8');
     
-    console.log(`${colors.dim}MCP server started on stdio. Waiting for commands...${colors.reset}`);
-    
     // Listen for JSON-RPC requests
     process.stdin.on('data', async (data) => {
       try {
@@ -1978,8 +1997,9 @@ async function startMcpServer() {
     // Keep the process running
     process.stdin.resume();
   } catch (err) {
-    console.error(`${colors.red}Error starting MCP server:${colors.reset} ${err.message}`);
-    console.error(`${colors.red}Stack:${colors.reset} ${err.stack}`);
+    // Log the error for debugging but don't show to the user
+    console.error(`Error starting MCP server: ${err.message}`);
+    console.error(`Stack: ${err.stack}`);
     
     // Create a JSON-RPC error response for the client
     const errorResponse = {
@@ -1994,6 +2014,13 @@ async function startMcpServer() {
     // Send the error to stdout and exit
     process.stdout.write(JSON.stringify(errorResponse) + '\n');
     process.exit(1);
+  } finally {
+    // Restore console functions if the server is stopped
+    // This is unlikely to execute since the server is designed to run until process exit
+    console.log = originalConsoleLog;
+    console.error = originalConsoleError;
+    console.warn = originalConsoleWarn;
+    console.info = originalConsoleInfo;
   }
 }
 
