@@ -1772,9 +1772,29 @@ async function startMcpServer() {
       // Describe API endpoint
       describe: async (args) => {
         try {
-          const output = await bufferOutput(describeApi, args.apiPath);
+          const apiPath = args.apiPath;
+          const raw = args.raw || false;
+          const typescript = args.typescript || false;
+          
+          // Create a buffer to collect output
+          let buffer = [];
+          const collect = (text) => {
+            if (text !== undefined && text !== null) {
+              buffer.push(text);
+            }
+          };
+          
+          // Call the API description function with all options
+          await describeApi(apiPath, {
+            rawOutput: raw,
+            typeScriptOutput: typescript,
+            output: collect,
+            useColors: false,
+            markdownFormat: true
+          });
+          
           return {
-            content: [{ type: "text", text: output }]
+            content: [{ type: "text", text: buffer.join('\n') }]
           };
         } catch (err) {
           return {
@@ -1787,9 +1807,27 @@ async function startMcpServer() {
       // GET request
       get: async (args) => {
         try {
-          const output = await bufferOutput(getApiResource, args.apiPath);
+          const apiPath = args.apiPath;
+          const raw = args.raw || false;
+          
+          // Create a buffer to collect output
+          let buffer = [];
+          const collect = (text) => {
+            if (text !== undefined && text !== null) {
+              buffer.push(text);
+            }
+          };
+          
+          // Call the API description function with all options
+          await getApiResource(apiPath, {
+            rawOutput: raw,
+            output: collect,
+            useColors: false,
+            markdownFormat: true
+          });
+          
           return {
-            content: [{ type: "text", text: output }]
+            content: [{ type: "text", text: buffer.join('\n') }]
           };
         } catch (err) {
           return {
