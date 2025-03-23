@@ -1414,7 +1414,7 @@ async function startMcpServer() {
     // Create an MCP server
     const server = new McpServerClass({
       name: "klbfw-describe",
-      version: "0.5.3"
+      version: "0.5.4"
     });
     
     // Add the describe tool
