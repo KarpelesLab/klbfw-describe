@@ -73,112 +73,123 @@ const colors = {
  * Perform an OPTIONS request to the specified API endpoint
  */
 function describeApi(apiPath, options = {}) {
-  const { rawOutput = false, typeScriptOutput = false } = options;
-  
-  console.log(`\n${colors.bright}${colors.blue}Describing API endpoint:${colors.reset} ${colors.green}${apiPath}${colors.reset}`);
-  console.log(`${colors.dim}Host: ${DEFAULT_API_HOST}${colors.reset}\n`);
-  
-  const reqUrl = url.parse(`https://${DEFAULT_API_HOST}${API_PREFIX}${apiPath}`);
-  
-  const reqOptions = {
-    hostname: reqUrl.hostname,
-    path: reqUrl.path,
-    method: 'OPTIONS',
-    headers: {
-      'Accept': 'application/json'
-    }
-  };
-  
-  const req = https.request(reqOptions, (res) => {
-    let data = '';
+  return new Promise((resolve, reject) => {
+    const { rawOutput = false, typeScriptOutput = false } = options;
     
-    res.on('data', (chunk) => {
-      data += chunk;
-    });
+    console.log(`\n${colors.bright}${colors.blue}Describing API endpoint:${colors.reset} ${colors.green}${apiPath}${colors.reset}`);
+    console.log(`${colors.dim}Host: ${DEFAULT_API_HOST}${colors.reset}\n`);
     
-    res.on('end', () => {
-      if (res.statusCode !== 200) {
-        console.log(`${colors.bright}Status:${colors.reset} ${colors.red}${res.statusCode}${colors.reset}`);
-        console.log(`${colors.red}Error: Unable to fetch API information${colors.reset}`);
-        return;
+    const reqUrl = url.parse(`https://${DEFAULT_API_HOST}${API_PREFIX}${apiPath}`);
+    
+    const reqOptions = {
+      hostname: reqUrl.hostname,
+      path: reqUrl.path,
+      method: 'OPTIONS',
+      headers: {
+        'Accept': 'application/json'
       }
+    };
+    
+    const req = https.request(reqOptions, (res) => {
+      let data = '';
       
-      try {
-        // Try to parse as JSON first
-        const jsonData = JSON.parse(data);
-        
-        if (rawOutput) {
-          // Raw JSON output without formatting
-          console.log('\n' + colors.bright + 'Raw Response:' + colors.reset);
-          console.log(JSON.stringify(jsonData, null, 2));
-        } else if (typeScriptOutput) {
-          // TypeScript definition output
-          generateTypeScriptDefinitions(jsonData);
-        } else {
-          // Formatted output
-          formatJsonResponse(jsonData);
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      res.on('end', () => {
+        if (res.statusCode !== 200) {
+          console.log(`${colors.bright}Status:${colors.reset} ${colors.red}${res.statusCode}${colors.reset}`);
+          console.log(`${colors.red}Error: Unable to fetch API information${colors.reset}`);
+          resolve();
+          return;
         }
-      } catch (e) {
-        // If not JSON, output as text
-        console.log(`\n${colors.bright}Response (Text):${colors.reset}`);
-        console.log(data);
-      }
+        
+        try {
+          // Try to parse as JSON first
+          const jsonData = JSON.parse(data);
+          
+          if (rawOutput) {
+            // Raw JSON output without formatting
+            console.log('\n' + colors.bright + 'Raw Response:' + colors.reset);
+            console.log(JSON.stringify(jsonData, null, 2));
+          } else if (typeScriptOutput) {
+            // TypeScript definition output
+            generateTypeScriptDefinitions(jsonData);
+          } else {
+            // Formatted output
+            formatJsonResponse(jsonData);
+          }
+          resolve();
+        } catch (e) {
+          // If not JSON, output as text
+          console.log(`\n${colors.bright}Response (Text):${colors.reset}`);
+          console.log(data);
+          resolve();
+        }
+      });
     });
+    
+    req.on('error', (e) => {
+      console.error(`${colors.red}Error:${colors.reset} ${e.message}`);
+      reject(e);
+    });
+    
+    req.end();
   });
-  
-  req.on('error', (e) => {
-    console.error(`${colors.red}Error:${colors.reset} ${e.message}`);
-  });
-  
-  req.end();
 }
 
 /**
  * Fetch and display documentation from GitHub repository
  */
 function fetchDocumentation(fileName = 'README.md') {
-  const docUrl = url.parse(`${DOC_REPO_URL}${fileName}`);
-  
-  console.log(`\n${colors.bright}${colors.blue}Fetching documentation:${colors.reset} ${colors.green}${fileName}${colors.reset}`);
-  console.log(`${colors.dim}Source: ${DOC_REPO_URL}${fileName}${colors.reset}\n`);
-  
-  const reqOptions = {
-    hostname: docUrl.hostname,
-    path: docUrl.pathname,
-    method: 'GET',
-    headers: {
-      'Accept': 'text/plain, text/markdown'
-    }
-  };
-  
-  const req = https.request(reqOptions, (res) => {
-    let data = '';
+  return new Promise((resolve, reject) => {
+    const docUrl = url.parse(`${DOC_REPO_URL}${fileName}`);
     
-    res.on('data', (chunk) => {
-      data += chunk;
-    });
+    console.log(`\n${colors.bright}${colors.blue}Fetching documentation:${colors.reset} ${colors.green}${fileName}${colors.reset}`);
+    console.log(`${colors.dim}Source: ${DOC_REPO_URL}${fileName}${colors.reset}\n`);
     
-    res.on('end', () => {
-      if (res.statusCode !== 200) {
-        console.log(`${colors.bright}Status:${colors.reset} ${colors.red}${res.statusCode}${colors.reset}`);
-        console.log(`${colors.red}Error: Unable to fetch documentation${colors.reset}`);
-        return;
+    const reqOptions = {
+      hostname: docUrl.hostname,
+      path: docUrl.pathname,
+      method: 'GET',
+      headers: {
+        'Accept': 'text/plain, text/markdown'
       }
+    };
+    
+    const req = https.request(reqOptions, (res) => {
+      let data = '';
       
-      // Display the markdown content
-      console.log(`${colors.bright}${colors.blue}Documentation:${colors.reset}\n`);
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
       
-      // Apply some basic Markdown formatting
-      const formattedText = formatMarkdown(data);
-      console.log(formattedText);
+      res.on('end', () => {
+        if (res.statusCode !== 200) {
+          console.log(`${colors.bright}Status:${colors.reset} ${colors.red}${res.statusCode}${colors.reset}`);
+          console.log(`${colors.red}Error: Unable to fetch documentation${colors.reset}`);
+          resolve();
+          return;
+        }
+        
+        // Display the markdown content
+        console.log(`${colors.bright}${colors.blue}Documentation:${colors.reset}\n`);
+        
+        // Apply some basic Markdown formatting
+        const formattedText = formatMarkdown(data);
+        console.log(formattedText);
+        resolve();
+      });
     });
+    
+    req.on('error', (e) => {
+      console.error(`${colors.red}Error:${colors.reset} ${e.message}`);
+      reject(e);
+    });
+    
+    req.end();
   });
-  
-  req.on('error', (e) => {
-    console.error(`${colors.red}Error:${colors.reset} ${e.message}`);
-  });
-  
-  req.end();
 }
 
 /**
@@ -229,72 +240,78 @@ function formatHeaders(headers) {
  * Perform a GET request to the specified API endpoint
  */
 function getApiResource(apiPath, options = {}) {
-  const { rawOutput = false } = options;
-  
-  console.log(`\n${colors.bright}${colors.blue}Retrieving API resource:${colors.reset} ${colors.green}${apiPath}${colors.reset}`);
-  console.log(`${colors.dim}Host: ${DEFAULT_API_HOST}${colors.reset}\n`);
-  
-  const reqUrl = url.parse(`https://${DEFAULT_API_HOST}${API_PREFIX}${apiPath}`);
-  
-  const reqOptions = {
-    hostname: reqUrl.hostname,
-    path: reqUrl.path,
-    method: 'GET',
-    headers: {
-      'Accept': 'application/json'
-    }
-  };
-  
-  const req = https.request(reqOptions, (res) => {
-    let data = '';
+  return new Promise((resolve, reject) => {
+    const { rawOutput = false } = options;
     
-    res.on('data', (chunk) => {
-      data += chunk;
-    });
+    console.log(`\n${colors.bright}${colors.blue}Retrieving API resource:${colors.reset} ${colors.green}${apiPath}${colors.reset}`);
+    console.log(`${colors.dim}Host: ${DEFAULT_API_HOST}${colors.reset}\n`);
     
-    res.on('end', () => {
-      console.log(`${colors.bright}Status:${colors.reset} ${res.statusCode === 200 ? colors.green : colors.red}${res.statusCode}${colors.reset}`);
+    const reqUrl = url.parse(`https://${DEFAULT_API_HOST}${API_PREFIX}${apiPath}`);
+    
+    const reqOptions = {
+      hostname: reqUrl.hostname,
+      path: reqUrl.path,
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
+      }
+    };
+    
+    const req = https.request(reqOptions, (res) => {
+      let data = '';
       
-      if (res.statusCode !== 200) {
-        console.log(`${colors.red}Error: Unable to fetch resource${colors.reset}`);
-        try {
-          // Try to parse error response as JSON
-          const errorData = JSON.parse(data);
-          if (errorData.error) {
-            console.log(`${colors.red}Error message:${colors.reset} ${errorData.error}`);
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      res.on('end', () => {
+        console.log(`${colors.bright}Status:${colors.reset} ${res.statusCode === 200 ? colors.green : colors.red}${res.statusCode}${colors.reset}`);
+        
+        if (res.statusCode !== 200) {
+          console.log(`${colors.red}Error: Unable to fetch resource${colors.reset}`);
+          try {
+            // Try to parse error response as JSON
+            const errorData = JSON.parse(data);
+            if (errorData.error) {
+              console.log(`${colors.red}Error message:${colors.reset} ${errorData.error}`);
+            }
+          } catch (e) {
+            // If not JSON, output as text
+            console.log(`${colors.red}Response:${colors.reset} ${data}`);
           }
+          resolve();
+          return;
+        }
+        
+        try {
+          // Try to parse as JSON first
+          const jsonData = JSON.parse(data);
+          
+          if (rawOutput) {
+            // Raw JSON output without formatting
+            console.log('\n' + colors.bright + 'Response:' + colors.reset);
+            console.log(JSON.stringify(jsonData, null, 2));
+          } else {
+            // Format the JSON output for display
+            formatGetResponse(jsonData);
+          }
+          resolve();
         } catch (e) {
           // If not JSON, output as text
-          console.log(`${colors.red}Response:${colors.reset} ${data}`);
+          console.log(`\n${colors.bright}Response (Text):${colors.reset}`);
+          console.log(data);
+          resolve();
         }
-        return;
-      }
-      
-      try {
-        // Try to parse as JSON first
-        const jsonData = JSON.parse(data);
-        
-        if (rawOutput) {
-          // Raw JSON output without formatting
-          console.log('\n' + colors.bright + 'Response:' + colors.reset);
-          console.log(JSON.stringify(jsonData, null, 2));
-        } else {
-          // Format the JSON output for display
-          formatGetResponse(jsonData);
-        }
-      } catch (e) {
-        // If not JSON, output as text
-        console.log(`\n${colors.bright}Response (Text):${colors.reset}`);
-        console.log(data);
-      }
+      });
     });
+    
+    req.on('error', (e) => {
+      console.error(`${colors.red}Error:${colors.reset} ${e.message}`);
+      reject(e);
+    });
+    
+    req.end();
   });
-  
-  req.on('error', (e) => {
-    console.error(`${colors.red}Error:${colors.reset} ${e.message}`);
-  });
-  
-  req.end();
 }
 
 /**
@@ -1273,74 +1290,80 @@ function formatJsonResponse(jsonData, options = {}) {
  * Retrieve and display available API objects from the root endpoint
  */
 function describeRootObjects() {
-  const reqUrl = url.parse(`https://${DEFAULT_API_HOST}${API_PREFIX}`);
-  
-  const reqOptions = {
-    hostname: reqUrl.hostname,
-    path: reqUrl.path,
-    method: 'OPTIONS',
-    headers: {
-      'Accept': 'application/json'
-    }
-  };
-  
-  const req = https.request(reqOptions, (res) => {
-    let data = '';
+  return new Promise((resolve, reject) => {
+    const reqUrl = url.parse(`https://${DEFAULT_API_HOST}${API_PREFIX}`);
     
-    res.on('data', (chunk) => {
-      data += chunk;
-    });
-    
-    res.on('end', () => {
-      if (res.statusCode !== 200) {
-        console.log(`${colors.bright}Status:${colors.reset} ${colors.red}${res.statusCode}${colors.reset}`);
-        console.log(`${colors.red}Error: Unable to fetch root API information${colors.reset}`);
-        return;
+    const reqOptions = {
+      hostname: reqUrl.hostname,
+      path: reqUrl.path,
+      method: 'OPTIONS',
+      headers: {
+        'Accept': 'application/json'
       }
+    };
+    
+    const req = https.request(reqOptions, (res) => {
+      let data = '';
       
-      try {
-        const jsonData = JSON.parse(data);
-        
-        if (jsonData.data && jsonData.data.prefix) {
-          console.log(`\n${colors.bright}${colors.blue}Available API Objects:${colors.reset}\n`);
-          
-          // Group by first letter to organize large lists
-          const groups = {};
-          jsonData.data.prefix.forEach(prefix => {
-            const firstChar = prefix.name.charAt(0).toUpperCase();
-            if (!groups[firstChar]) groups[firstChar] = [];
-            groups[firstChar].push(prefix);
-          });
-          
-          // Display grouped endpoints
-          Object.keys(groups).sort().forEach(letter => {
-            console.log(`  ${colors.bright}${letter}${colors.reset}`);
-            
-            // Sort endpoints within each group
-            const sortedEndpoints = groups[letter].sort((a, b) => a.name.localeCompare(b.name));
-            
-            sortedEndpoints.forEach(endpoint => {
-              console.log(`    ${colors.green}${endpoint.name}${colors.reset}${endpoint.description ? ` - ${colors.dim}${endpoint.description}${colors.reset}` : ''}`);
-            });
-            console.log(''); // Add space between groups
-          });
-          
-          console.log(`${colors.dim}Run with a specific API path to get more details about an object.${colors.reset}`);
-          console.log(`${colors.dim}Example: npx @karpeleslab/klbfw-describe User${colors.reset}`);
-        } else {
-          console.log(`${colors.red}Error: Could not retrieve API object list.${colors.reset}`);
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      res.on('end', () => {
+        if (res.statusCode !== 200) {
+          console.log(`${colors.bright}Status:${colors.reset} ${colors.red}${res.statusCode}${colors.reset}`);
+          console.log(`${colors.red}Error: Unable to fetch root API information${colors.reset}`);
+          resolve();
+          return;
         }
-      } catch (e) {
-        console.log(`${colors.red}Error parsing API response:${colors.reset} ${e.message}`);
-      }
+        
+        try {
+          const jsonData = JSON.parse(data);
+          
+          if (jsonData.data && jsonData.data.prefix) {
+            console.log(`\n${colors.bright}${colors.blue}Available API Objects:${colors.reset}\n`);
+            
+            // Group by first letter to organize large lists
+            const groups = {};
+            jsonData.data.prefix.forEach(prefix => {
+              const firstChar = prefix.name.charAt(0).toUpperCase();
+              if (!groups[firstChar]) groups[firstChar] = [];
+              groups[firstChar].push(prefix);
+            });
+            
+            // Display grouped endpoints
+            Object.keys(groups).sort().forEach(letter => {
+              console.log(`  ${colors.bright}${letter}${colors.reset}`);
+              
+              // Sort endpoints within each group
+              const sortedEndpoints = groups[letter].sort((a, b) => a.name.localeCompare(b.name));
+              
+              sortedEndpoints.forEach(endpoint => {
+                console.log(`    ${colors.green}${endpoint.name}${colors.reset}${endpoint.description ? ` - ${colors.dim}${endpoint.description}${colors.reset}` : ''}`);
+              });
+              console.log(''); // Add space between groups
+            });
+            
+            console.log(`${colors.dim}Run with a specific API path to get more details about an object.${colors.reset}`);
+            console.log(`${colors.dim}Example: npx @karpeleslab/klbfw-describe User${colors.reset}`);
+          } else {
+            console.log(`${colors.red}Error: Could not retrieve API object list.${colors.reset}`);
+          }
+          resolve();
+        } catch (e) {
+          console.log(`${colors.red}Error parsing API response:${colors.reset} ${e.message}`);
+          resolve();
+        }
+      });
     });
+    
+    req.on('error', (e) => {
+      console.error(`${colors.red}Error:${colors.reset} ${e.message}`);
+      reject(e);
+    });
+    
+    req.end();
   });
-  
-  req.on('error', (e) => {
-    console.error(`${colors.red}Error:${colors.reset} ${e.message}`);
-  });
-  
-  req.end();
 }
 
 /**
@@ -1403,15 +1426,12 @@ async function startMcpServer() {
       },
       "Describe an API endpoint's capabilities and structure",
       async ({ apiPath, raw = false, typescript = false }) => {
-        const output = await captureOutput((done) => {
-          describeApi(apiPath, { 
+        const output = await captureOutput(async () => {
+          await describeApi(apiPath, { 
             rawOutput: raw, 
             typeScriptOutput: typescript,
             silent: true // Don't directly output to console
           });
-          
-          // Give time for async operations to complete
-          setTimeout(done, 1000);
         });
         
         return {
@@ -1428,14 +1448,11 @@ async function startMcpServer() {
       },
       "Perform a GET request on an API endpoint to retrieve data",
       async ({ apiPath, raw = false }) => {
-        const output = await captureOutput((done) => {
-          getApiResource(apiPath, { 
+        const output = await captureOutput(async () => {
+          await getApiResource(apiPath, { 
             rawOutput: raw,
             silent: true // Don't directly output to console
           });
-          
-          // Give time for async operations to complete
-          setTimeout(done, 1000);
         });
         
         return {
@@ -1449,11 +1466,8 @@ async function startMcpServer() {
       {},
       "List available top-level API objects in the KLB API",
       async () => {
-        const output = await captureOutput((done) => {
-          describeRootObjects(true); // Silent mode
-          
-          // Give time for async operations to complete
-          setTimeout(done, 1000);
+        const output = await captureOutput(async () => {
+          await describeRootObjects(true); // Silent mode
         });
         
         return {
@@ -1469,13 +1483,10 @@ async function startMcpServer() {
       },
       "Access reference documentation for KLB API integration",
       async ({ fileName = 'README.md' }) => {
-        const output = await captureOutput((done) => {
-          fetchDocumentation(fileName, {
+        const output = await captureOutput(async () => {
+          await fetchDocumentation(fileName, {
             silent: true // Don't directly output to console
           });
-          
-          // Give time for async operations to complete
-          setTimeout(done, 1000);
         });
         
         return {
@@ -1485,27 +1496,28 @@ async function startMcpServer() {
     );
     
     // Helper function to capture console.log output
-    function captureOutput(fn) {
-      return new Promise((resolve) => {
-        // Capture console.log output
-        const originalConsoleLog = console.log;
-        let output = '';
+    async function captureOutput(fn) {
+      // Capture console.log output
+      const originalConsoleLog = console.log;
+      let output = '';
+      
+      console.log = function(...args) {
+        // Convert all args to strings and join them
+        const line = args.map(arg => 
+          typeof arg === 'string' ? arg : JSON.stringify(arg)
+        ).join(' ');
         
-        console.log = function(...args) {
-          // Convert all args to strings and join them
-          const line = args.map(arg => 
-            typeof arg === 'string' ? arg : JSON.stringify(arg)
-          ).join(' ');
-          
-          output += line + '\n';
-        };
-        
-        fn(() => {
-          // Restore console.log and return the collected output
-          console.log = originalConsoleLog;
-          resolve(output);
-        });
-      });
+        output += line + '\n';
+      };
+      
+      try {
+        await fn();
+      } finally {
+        // Restore console.log
+        console.log = originalConsoleLog;
+      }
+      
+      return output;
     }
     
     // Start the server on stdin/stdout
@@ -1555,50 +1567,6 @@ for (let i = 0; i < args.length; i++) {
     apiPath = arg;
   }
 }
-
-// Update function signatures to support silent mode
-const originalDescribeApi = describeApi;
-describeApi = function(apiPath, options = {}) {
-  const { silent = false, ...otherOptions } = options;
-  if (!silent) {
-    return originalDescribeApi(apiPath, otherOptions);
-  }
-  
-  // If silent mode, the function will run but output will be captured by the MCP handler
-  return originalDescribeApi(apiPath, otherOptions);
-};
-
-const originalGetApiResource = getApiResource;
-getApiResource = function(apiPath, options = {}) {
-  const { silent = false, ...otherOptions } = options;
-  if (!silent) {
-    return originalGetApiResource(apiPath, otherOptions);
-  }
-  
-  // If silent mode, the function will run but output will be captured by the MCP handler
-  return originalGetApiResource(apiPath, otherOptions);
-};
-
-const originalDescribeRootObjects = describeRootObjects;
-describeRootObjects = function(silent = false) {
-  if (!silent) {
-    return originalDescribeRootObjects();
-  }
-  
-  // If silent mode, the function will run but output will be captured by the MCP handler
-  return originalDescribeRootObjects();
-};
-
-const originalFetchDocumentation = fetchDocumentation;
-fetchDocumentation = function(fileName = 'README.md', options = {}) {
-  const { silent = false } = options;
-  if (!silent) {
-    return originalFetchDocumentation(fileName);
-  }
-  
-  // If silent mode, the function will run but output will be captured by the MCP handler
-  return originalFetchDocumentation(fileName);
-};
 
 // Execute in the appropriate mode
 if (mcpMode) {
