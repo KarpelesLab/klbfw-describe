@@ -1,6 +1,6 @@
 {
   "name": "@karpeleslab/klbfw-describe",
-  "version": "0.5.9",
+  "version": "0.5.10",
   "description": "CLI tool to explore and document KLB API endpoints",
   "main": "index.js",
   "type": "module",

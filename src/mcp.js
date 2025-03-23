@@ -10,7 +10,7 @@ export async function startMcpServer() {
   // Create an MCP server
   const server = new McpServer({
     name: "klbfw-describe",
-    version: "0.5.9"
+    version: "0.5.10"
   });
   
   // Add describe tool with explicit schema
