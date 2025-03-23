@@ -232,9 +232,12 @@ export async function startMcpServer() {
   for (const endpoint of availableEndpoints) {
     const uri = `${baseUrl}/api/${endpoint}`;
     
+    // Safely encode endpoints with slashes
+    const safeEndpointId = endpoint.replace(/\//g, '_');
+    
     // Register the standard resource
     server.resource(
-      `api_${endpoint}`,
+      `api_${safeEndpointId}`,
       uri,
       {
         description: `API description for ${endpoint}`,
@@ -268,10 +271,11 @@ export async function startMcpServer() {
       }
     );
     
-    // Register the raw version
+    // Register the raw version - properly handle URL encoding for paths with slashes
+    const rawEndpointPath = endpoint.includes('/') ? encodeURIComponent(endpoint) : endpoint;
     server.resource(
-      `api_raw_${endpoint}`,
-      `${baseUrl}/api/raw/${endpoint}`,
+      `api_raw_${safeEndpointId}`,
+      `${baseUrl}/api/raw/${rawEndpointPath}`,
       {
         description: `Raw API description for ${endpoint}`,
         name: `${endpoint} (Raw)`
@@ -305,10 +309,11 @@ export async function startMcpServer() {
       }
     );
     
-    // Register the TypeScript version
+    // Register the TypeScript version - properly handle URL encoding for paths with slashes
+    const tsEndpointPath = endpoint.includes('/') ? encodeURIComponent(endpoint) : endpoint;
     server.resource(
-      `api_ts_${endpoint}`,
-      `${baseUrl}/api/typescript/${endpoint}`,
+      `api_ts_${endpoint.replace(/\//g, '_')}`,
+      `${baseUrl}/api/typescript/${tsEndpointPath}`,
       {
         description: `TypeScript definitions for ${endpoint}`,
         name: `${endpoint} (TypeScript)`

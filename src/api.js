@@ -397,8 +397,8 @@ export function formatJsonResponse(jsonData, options = {}) {
   if (data.table && data.table.Struct) {
     if (markdownFormat) {
       printOutput(`\n### Table Structure\n`);
-      printOutput(`| Field | Type | Required | Description |`);
-      printOutput(`| ----- | ---- | -------- | ----------- |`);
+      printOutput(`| Field | Type | Size | Required | Validator | Description |`);
+      printOutput(`| ----- | ---- | ---- | -------- | --------- | ----------- |`);
     } else {
       printOutput(`\n${format(colors.bright + colors.blue, "Table Structure:")}\n`);
     }
@@ -409,11 +409,62 @@ export function formatJsonResponse(jsonData, options = {}) {
       const info = data.table.Struct[field];
       const required = info.null === false ? 'Yes' : 'No';
       const desc = info.desc || '';
+      const size = info.size !== undefined ? info.size.toString() : '';
+      const validator = info.validator || '';
+      const isFK = field.endsWith('__') ? ' (Foreign Key)' : '';
+      const isPK = info.key === 'PRIMARY' ? ' (Primary Key)' : '';
+      const typeInfo = info.type || '';
+      
+      // Add additional type information for ENUMs and SETs
+      let expandedType = typeInfo;
+      if (info.values && Array.isArray(info.values)) {
+        expandedType = `${typeInfo} (${info.values.join(', ')})`;
+      }
+      
+      const fieldDetails = isPK + isFK;
+      const fullDesc = fieldDetails ? (desc ? `${desc} ${fieldDetails}` : fieldDetails) : desc;
       
       if (markdownFormat) {
-        printOutput(`| ${field} | ${info.type || ''} | ${required} | ${desc} |`);
+        printOutput(`| ${field} | ${expandedType} | ${size} | ${required} | ${validator} | ${fullDesc} |`);
       } else {
-        printOutput(`  ${format(colors.green, field.padEnd(20))} ${(info.type || '').padEnd(15)} ${required.padEnd(10)} ${desc}`);
+        printOutput(`  ${format(colors.green, field.padEnd(20))} ${expandedType.padEnd(20)} ${size.padEnd(6)} ${required.padEnd(10)} ${validator.padEnd(12)} ${fullDesc}`);
+      }
+    }
+    
+    // Display primary key if available
+    if (data.table.Struct._primary) {
+      const primaryKey = Array.isArray(data.table.Struct._primary) ? data.table.Struct._primary.join(', ') : data.table.Struct._primary;
+      
+      if (markdownFormat) {
+        printOutput(`\n**Primary Key:** ${primaryKey}`);
+      } else {
+        printOutput(`\n  ${format(colors.bright + colors.blue, "Primary Key:")} ${format(colors.green, primaryKey)}`);
+      }
+    }
+    
+    // Display indexes if available
+    if (data.table.Struct._keys) {
+      const keyInfo = data.table.Struct._keys;
+      const keys = Object.keys(keyInfo);
+      
+      if (keys.length > 0) {
+        if (markdownFormat) {
+          printOutput(`\n**Indexes:**`);
+          for (const key of keys) {
+            const keyValue = keyInfo[key];
+            const keyType = key.startsWith('@') ? 'Unique' : (keyValue === 'FOREIGN' ? 'Foreign Key' : 'Index');
+            const keyFields = Array.isArray(keyValue) ? keyValue.join(', ') : keyValue;
+            printOutput(`- ${key}: ${keyType} (${keyFields})`);
+          }
+        } else {
+          printOutput(`\n  ${format(colors.bright + colors.blue, "Indexes:")}`);
+          for (const key of keys) {
+            const keyValue = keyInfo[key];
+            const keyType = key.startsWith('@') ? 'Unique' : (keyValue === 'FOREIGN' ? 'Foreign Key' : 'Index');
+            const keyFields = Array.isArray(keyValue) ? keyValue.join(', ') : keyValue;
+            printOutput(`    ${format(colors.yellow, key.padEnd(20))} ${keyType.padEnd(15)} ${keyFields}`);
+          }
+        }
       }
     }
   }
@@ -642,17 +693,62 @@ export interface KlbDateTime {
     const typeName = getTypeName(apiPath);
     const fields = Object.keys(data.table.Struct).filter(key => !key.startsWith('_'));
     
+    // Add description from either data.description (new) or data.desc (legacy)
+    const description = data.description || data.desc || typeName + ' object structure';
+    
     typeScript += `/**
- * ${data.desc || typeName + ' object structure'}
+ * ${description}
  */
 export interface ${typeName} {
 `;
     
     for (const field of fields) {
       const info = data.table.Struct[field];
-      const tsType = convertToTypeScriptType(info.type);
-      const nullable = !info.required ? ' | null' : '';
-      const comment = info.desc ? ` // ${info.desc}` : '';
+      const tsType = convertToTypeScriptType(info.type, field, info);
+      const isNullable = info.null !== false;
+      const nullable = isNullable ? ' | null' : '';
+      
+      // Build a comprehensive comment with all relevant field info
+      let commentParts = [];
+      
+      // Add field description if available
+      if (info.desc) {
+        commentParts.push(info.desc);
+      }
+      
+      // Add primary key info
+      if (info.key === 'PRIMARY') {
+        commentParts.push('Primary key');
+      }
+      
+      // Add foreign key info
+      if (field.endsWith('__')) {
+        const refEntity = field.replace(/__$/, '');
+        commentParts.push(`Foreign key to ${refEntity}`);
+      }
+      
+      // Add validator info
+      if (info.validator) {
+        commentParts.push(`Validator: ${info.validator}`);
+      }
+      
+      // Add size info
+      if (info.size !== undefined) {
+        commentParts.push(`Size: ${info.size}`);
+      }
+      
+      // Add enum/set values info
+      if ((info.type === 'ENUM' || info.type === 'SET') && info.values && Array.isArray(info.values)) {
+        commentParts.push(`Values: ${info.values.join(', ')}`);
+      }
+      
+      // Add default value info
+      if (info.default !== undefined && info.default !== null) {
+        commentParts.push(`Default: ${info.default}`);
+      }
+      
+      // Format the final comment
+      const comment = commentParts.length > 0 ? ` // ${commentParts.join('; ')}` : '';
       
       typeScript += `  ${field}: ${tsType}${nullable};${comment}\n`;
     }
@@ -692,16 +788,44 @@ export interface ${typeName}${procedureName ? pascalCase(procedureName) : ''}Par
       const methodName = func.name;
       
       if (func.args && func.args.length > 0) {
+        // Add the function description as a comment
+        const description = func.description || func.desc || `Request parameters for ${typeName}.${methodName} method`;
+        const returnDesc = func.return_description ? `\n\n@returns ${func.return_description}` : '';
+        
         typeScript += `/**
- * Request parameters for ${typeName}.${methodName} method
+ * ${description}${returnDesc}
  */
 export interface ${typeName}${pascalCase(methodName)}Params {
 `;
         
         for (const arg of func.args) {
-          const tsType = convertToTypeScriptType(arg.type);
+          // Try to determine a more specific type based on parameter name patterns
+          let inferredType = 'any';
+          
+          // Get a better description
+          const argDesc = arg.description || arg.desc || '';
+          
+          // Check for common parameter naming patterns
+          if (arg.name === 'id' || arg.name.endsWith('_id')) {
+            inferredType = 'string'; // IDs are likely strings
+          } else if (arg.name.endsWith('__')) {
+            inferredType = 'string'; // Foreign keys are UUIDs/strings
+          } else if (arg.name === 'email') {
+            inferredType = 'string'; // Email is a string
+          } else if (arg.name === 'status' || arg.name === 'type') {
+            inferredType = 'string'; // Status/Type typically strings or enums
+          } else if (arg.name === 'page' || arg.name === 'limit' || arg.name === 'offset') {
+            inferredType = 'number'; // Pagination params are numbers
+          } else if (arg.name === 'options' || arg.name === 'config' || arg.name === 'meta') {
+            inferredType = 'Record<string, any>'; // Options are typically objects
+          } else if (arg.name.startsWith('is_') || arg.name.startsWith('has_') || arg.name === 'active' || arg.name === 'enabled') {
+            inferredType = 'boolean'; // Boolean flags
+          }
+          
+          // If an explicit type was provided, use that instead
+          const tsType = arg.type ? convertToTypeScriptType(arg.type) : inferredType;
           const nullable = !arg.required ? '?' : '';
-          const comment = arg.desc ? ` // ${arg.desc}` : '';
+          const comment = argDesc ? ` // ${argDesc}` : '';
           
           typeScript += `  ${arg.name}${nullable}: ${tsType};${comment}\n`;
         }
@@ -721,20 +845,44 @@ export interface ${typeName}${pascalCase(methodName)}Params {
 /**
  * Convert KLB API type to TypeScript type
  */
-function convertToTypeScriptType(type) {
+function convertToTypeScriptType(type, field = '', info = {}) {
   if (!type) return 'any';
   
   const lowerType = type.toLowerCase();
   
+  // Special handling for foreign keys (fields ending with __)
+  if (field.endsWith('__') && info.validator === 'uuid') {
+    return 'string'; // UUID foreign key
+  }
+  
+  // Handle ENUM and SET types with literal unions
+  if ((lowerType === 'enum' || lowerType === 'set') && info.values && Array.isArray(info.values)) {
+    // Create a union type of the possible values
+    return info.values.map(v => `'${v}'`).join(' | ');
+  }
+  
   switch (lowerType) {
     case 'int':
     case 'integer':
+    case 'bigint':
+    case 'tinyint':
+    case 'smallint':
+    case 'mediumint':
     case 'float':
     case 'double':
+    case 'decimal':
     case 'number':
       return 'number';
+    case 'char':
+      if (info.validator === 'uuid') {
+        return 'string'; // UUID
+      }
+      return 'string';
     case 'string':
     case 'text':
+    case 'tinytext':
+    case 'mediumtext':
+    case 'longtext':
     case 'varchar':
       return 'string';
     case 'bool':
@@ -743,6 +891,10 @@ function convertToTypeScriptType(type) {
     case 'datetime':
     case 'timestamp':
       return 'KlbDateTime';
+    case 'date':
+      return 'string'; // ISO date string
+    case 'time':
+      return 'string'; // Time string
     case 'json':
     case 'array':
       return 'any[]';
@@ -773,6 +925,12 @@ function getTypeName(apiPath) {
   // Check if the last part is an ID (contains non-letter characters)
   if (/[^a-zA-Z]/.test(lastPart)) {
     return pascalCase(parts[parts.length - 2] || 'ApiObject');
+  }
+  
+  // If dealing with a nested path like "Content/Cms", combine them
+  if (parts.length > 1) {
+    // Only combine last two parts to avoid overly long names
+    return pascalCase(parts[parts.length - 2] + parts[parts.length - 1]);
   }
   
   // Otherwise use the last part

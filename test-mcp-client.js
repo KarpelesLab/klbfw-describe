@@ -44,7 +44,7 @@ const rawResourceCommand = {
   "id": "test-3",
   "method": "resources/read",
   "params": {
-    "uri": baseUrl + "/api/raw/" + apiPath
+    "uri": baseUrl + "/api/raw/" + (apiPath.includes('/') ? encodeURIComponent(apiPath) : apiPath)
   }
 };
 
@@ -54,7 +54,7 @@ const tsResourceCommand = {
   "id": "test-4",
   "method": "resources/read",
   "params": {
-    "uri": baseUrl + "/api/typescript/" + apiPath
+    "uri": baseUrl + "/api/typescript/" + (apiPath.includes('/') ? encodeURIComponent(apiPath) : apiPath)
   }
 };
 
