@@ -1,21 +1,89 @@
 #!/usr/bin/env node
 
+// Finding details on the actual MCP jsonrpc methods was surprisingly hard.
+// See: https://spec.modelcontextprotocol.io/specification/2024-11-05/server/tools/
+
 // A simple script to test the MCP server by sending a command
 import { exec } from 'child_process';
 import fs from 'fs';
 
+// Choose which command to test 
+// Options: tool, resource, raw, typescript, list
+const testMode = process.argv[2] || 'tool';
+const apiPath = process.argv[3] || 'User';
+
 // Correct MCP format for tool calls
-const command = {
+const toolCommand = {
   "jsonrpc": "2.0",
   "id": "test-1",
   "method": "tools/call",
   "params": {
     "name": "describe_raw",
     "arguments": {
-      "apiPath": "User"
+      "apiPath": apiPath
     }
   }
 };
+
+// Base URL for resources (must be a full URL)
+const baseUrl = "http://localhost";
+
+// Correct MCP format for resource read (formatted description)
+const resourceCommand = {
+  "jsonrpc": "2.0",
+  "id": "test-2",
+  "method": "resources/read",
+  "params": {
+    "uri": baseUrl + "/api/" + apiPath
+  }
+};
+
+// Correct MCP format for raw resource read
+const rawResourceCommand = {
+  "jsonrpc": "2.0",
+  "id": "test-3",
+  "method": "resources/read",
+  "params": {
+    "uri": baseUrl + "/api/raw/" + apiPath
+  }
+};
+
+// Correct MCP format for TypeScript resource read
+const tsResourceCommand = {
+  "jsonrpc": "2.0",
+  "id": "test-4",
+  "method": "resources/read",
+  "params": {
+    "uri": baseUrl + "/api/typescript/" + apiPath
+  }
+};
+
+// Correct MCP format for listing available resources
+const listResourcesCommand = {
+  "jsonrpc": "2.0",
+  "id": "test-5",
+  "method": "resources/list",
+  "params": {}
+};
+
+// Select the appropriate command based on test mode
+let command;
+switch (testMode) {
+  case 'resource':
+    command = resourceCommand;
+    break;
+  case 'raw':
+    command = rawResourceCommand;
+    break;
+  case 'typescript':
+    command = tsResourceCommand;
+    break;
+  case 'list':
+    command = listResourcesCommand;
+    break;
+  default:
+    command = toolCommand;
+}
 
 const serverProcess = exec('node index.js --mcp', {
   stdio: ['pipe', 'pipe', 'inherit']
@@ -36,7 +104,8 @@ serverProcess.stdout.on('data', (data) => {
     console.log(JSON.stringify(response, null, 2));
     
     // Save to file for inspection
-    fs.writeFileSync('mcp-response.json', JSON.stringify(response, null, 2));
+    const outputFile = `test-mcp-${testMode}.json`;
+    fs.writeFileSync(outputFile, JSON.stringify(response, null, 2));
     
     // Exit after getting response
     setTimeout(() => {
