@@ -6,24 +6,21 @@ import { describeApi, getApiResource, fetchDocumentation } from './api.js';
 /**
  * Start an MCP server for programmatic access to the API description tool
  */
-export function startMcpServer() {
-  // Create MCP server with stdio transport
+export async function startMcpServer() {
+  // Create an MCP server
   const server = new McpServer({
     name: "klbfw-describe",
-    version: "0.5.9",
-    displayName: "KLB API Describe Tool"
+    version: "0.5.9"
   });
   
-  // Register tools
-  server.registerTool({
-    name: "describe",
-    description: "Describe an API endpoint",
-    parameters: z.object({
-      apiPath: z.string().min(1).describe("The API endpoint path to describe"),
-      raw: z.boolean().optional().default(false).describe("Whether to show raw JSON output"),
-      typescriptOutput: z.boolean().optional().default(false).describe("Whether to generate TypeScript definitions")
-    }),
-    handler: async (params) => {
+  // Add describe tool
+  server.tool("describe",
+    {
+      apiPath: z.string().min(1),
+      raw: z.boolean().optional().default(false),
+      typescriptOutput: z.boolean().optional().default(false)
+    },
+    async (params) => {
       let output = '';
       const appendOutput = (text) => {
         output += text + '\n';
@@ -39,16 +36,15 @@ export function startMcpServer() {
       
       return { markdown: output };
     }
-  });
+  );
   
-  server.registerTool({
-    name: "get",
-    description: "Perform a GET request to an API endpoint",
-    parameters: z.object({
-      apiPath: z.string().min(1).describe("The API endpoint path to request"),
-      raw: z.boolean().optional().default(false).describe("Whether to show raw JSON output")
-    }),
-    handler: async (params) => {
+  // Add get tool
+  server.tool("get",
+    {
+      apiPath: z.string().min(1),
+      raw: z.boolean().optional().default(false)
+    },
+    async (params) => {
       let output = '';
       const appendOutput = (text) => {
         output += text + '\n';
@@ -63,15 +59,14 @@ export function startMcpServer() {
       
       return { markdown: output };
     }
-  });
+  );
   
-  server.registerTool({
-    name: "documentation",
-    description: "Fetch documentation from GitHub repository",
-    parameters: z.object({
-      fileName: z.string().optional().default('README.md').describe("The documentation file to fetch")
-    }),
-    handler: async (params) => {
+  // Add documentation tool
+  server.tool("documentation",
+    {
+      fileName: z.string().optional().default('README.md')
+    },
+    async (params) => {
       let output = '';
       const appendOutput = (text) => {
         output += text + '\n';
@@ -85,11 +80,11 @@ export function startMcpServer() {
       
       return { markdown: output };
     }
-  });
+  );
   
-  // Start the MCP server with stdio transport
+  // Start receiving messages on stdin and sending messages on stdout
   const transport = new StdioServerTransport();
-  server.listen(transport);
+  await server.connect(transport);
   
   return server;
 }

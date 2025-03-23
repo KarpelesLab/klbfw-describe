@@ -42,7 +42,7 @@ export async function processArguments(args) {
   
   // Start MCP server if requested
   if (mcpMode) {
-    startMcpServer();
+    await startMcpServer();
     return; // MCP server handles its own lifecycle
   }
   
