@@ -142,7 +142,7 @@ function describeApi(apiPath, options = {}) {
 /**
  * Fetch and display documentation from GitHub repository
  */
-function fetchDocumentation(fileName = 'README.md') {
+function fetchDocumentation(fileName = 'README.md', options = {}) {
   return new Promise((resolve, reject) => {
     const docUrl = url.parse(`${DOC_REPO_URL}${fileName}`);
     
@@ -1411,10 +1411,11 @@ async function startMcpServer() {
     const { McpServer: McpServerClass } = await import('@modelcontextprotocol/sdk/server/mcp.js');
     const { StdioServerTransport: StdioTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
     
-    // Create an MCP server
+    // Create an MCP server with debug mode
     const server = new McpServerClass({
       name: "klbfw-describe",
-      version: "0.5.4"
+      version: "0.5.6",
+      debug: true // Enable debug mode
     });
     
     // Add the describe tool
@@ -1426,17 +1427,28 @@ async function startMcpServer() {
       },
       "Describe an API endpoint's capabilities and structure",
       async ({ apiPath, raw = false, typescript = false }) => {
-        const output = await captureOutput(async () => {
-          await describeApi(apiPath, { 
-            rawOutput: raw, 
-            typeScriptOutput: typescript,
-            silent: true // Don't directly output to console
+        try {
+          const output = await captureOutput(async () => {
+            await describeApi(apiPath, { 
+              rawOutput: raw, 
+              typeScriptOutput: typescript,
+              silent: true // Don't directly output to console
+            });
           });
-        });
-        
-        return {
-          content: [{ type: "text", text: output }]
-        };
+          
+          return {
+            content: [{ type: "text", text: output }]
+          };
+        } catch (err) {
+          // Return the error in the response for debugging
+          console.error("MCP describe error:", err);
+          return {
+            content: [{ 
+              type: "text", 
+              text: `Error: ${err.message}\nStack: ${err.stack}` 
+            }]
+          };
+        }
       }
     );
     
@@ -1448,16 +1460,27 @@ async function startMcpServer() {
       },
       "Perform a GET request on an API endpoint to retrieve data",
       async ({ apiPath, raw = false }) => {
-        const output = await captureOutput(async () => {
-          await getApiResource(apiPath, { 
-            rawOutput: raw,
-            silent: true // Don't directly output to console
+        try {
+          const output = await captureOutput(async () => {
+            await getApiResource(apiPath, { 
+              rawOutput: raw,
+              silent: true // Don't directly output to console
+            });
           });
-        });
-        
-        return {
-          content: [{ type: "text", text: output }]
-        };
+          
+          return {
+            content: [{ type: "text", text: output }]
+          };
+        } catch (err) {
+          // Return the error in the response for debugging
+          console.error("MCP get error:", err);
+          return {
+            content: [{ 
+              type: "text", 
+              text: `Error: ${err.message}\nStack: ${err.stack}` 
+            }]
+          };
+        }
       }
     );
     
@@ -1466,13 +1489,24 @@ async function startMcpServer() {
       {},
       "List available top-level API objects in the KLB API",
       async () => {
-        const output = await captureOutput(async () => {
-          await describeRootObjects(true); // Silent mode
-        });
-        
-        return {
-          content: [{ type: "text", text: output }]
-        };
+        try {
+          const output = await captureOutput(async () => {
+            await describeRootObjects(true); // Silent mode
+          });
+          
+          return {
+            content: [{ type: "text", text: output }]
+          };
+        } catch (err) {
+          // Return the error in the response for debugging
+          console.error("MCP listObjects error:", err);
+          return {
+            content: [{ 
+              type: "text", 
+              text: `Error: ${err.message}\nStack: ${err.stack}` 
+            }]
+          };
+        }
       }
     );
     
@@ -1483,15 +1517,26 @@ async function startMcpServer() {
       },
       "Access reference documentation for KLB API integration",
       async ({ fileName = 'README.md' }) => {
-        const output = await captureOutput(async () => {
-          await fetchDocumentation(fileName, {
-            silent: true // Don't directly output to console
+        try {
+          const output = await captureOutput(async () => {
+            await fetchDocumentation(fileName, {
+              silent: true // Don't directly output to console
+            });
           });
-        });
-        
-        return {
-          content: [{ type: "text", text: output }]
-        };
+          
+          return {
+            content: [{ type: "text", text: output }]
+          };
+        } catch (err) {
+          // Return the error in the response for debugging
+          console.error("MCP doc error:", err);
+          return {
+            content: [{ 
+              type: "text", 
+              text: `Error: ${err.message}\nStack: ${err.stack}` 
+            }]
+          };
+        }
       }
     );
     
@@ -1499,8 +1544,10 @@ async function startMcpServer() {
     async function captureOutput(fn) {
       // Capture console.log output
       const originalConsoleLog = console.log;
+      const originalConsoleError = console.error;
       let output = '';
       
+      // Capture all console output
       console.log = function(...args) {
         // Convert all args to strings and join them
         const line = args.map(arg => 
@@ -1510,14 +1557,28 @@ async function startMcpServer() {
         output += line + '\n';
       };
       
+      console.error = function(...args) {
+        // Convert all args to strings and join them
+        const line = args.map(arg => 
+          typeof arg === 'string' ? arg : JSON.stringify(arg)
+        ).join(' ');
+        
+        output += `ERROR: ${line}\n`;
+        originalConsoleError(...args); // Still log to stderr for debugging
+      };
+      
       try {
         await fn();
+        return output || "Command completed successfully with no output";
+      } catch (err) {
+        output += `\nERROR: ${err.message}\n`;
+        output += `STACK: ${err.stack}\n`;
+        return output;
       } finally {
-        // Restore console.log
+        // Restore console functions
         console.log = originalConsoleLog;
+        console.error = originalConsoleError;
       }
-      
-      return output;
     }
     
     // Start the server on stdin/stdout
