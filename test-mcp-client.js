@@ -18,7 +18,7 @@ const toolCommand = {
   "id": "test-1",
   "method": "tools/call",
   "params": {
-    "name": "describe_raw",
+    "name": "describe",
     "arguments": {
       "apiPath": apiPath
     }

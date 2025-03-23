@@ -323,13 +323,73 @@ export function formatJsonResponse(jsonData, options = {}) {
     }
   }
   
-  // Display description if available
-  if (data.desc) {
+  // Display class description if available (from the description field)
+  if (data.description) {
+    if (markdownFormat) {
+      printOutput(`\n### Class Description\n${data.description}`);
+    } else {
+      printOutput(`\n${format(colors.bright + colors.blue, "Class Description:")}`);
+      printOutput(data.description);
+    }
+  } else if (data.desc) {
+    // For backward compatibility, also check the desc field
     if (markdownFormat) {
       printOutput(`\n### Description\n${data.desc}`);
     } else {
       printOutput(`\n${format(colors.bright, "Description:")}`);
       printOutput(data.desc);
+    }
+  }
+  
+  // Display access level if available
+  if (data.access) {
+    if (markdownFormat) {
+      printOutput(`\n### Access Level: \`${data.access}\``);
+    } else {
+      printOutput(`\n${format(colors.bright, "Access Level:")} ${format(colors.yellow, data.access)}`);
+    }
+  }
+  
+  // Display allowed methods if available
+  if (data.allowed_methods && data.allowed_methods.length > 0) {
+    if (markdownFormat) {
+      printOutput(`\n### Allowed Methods: \`${data.allowed_methods.join(', ')}\``);
+    } else {
+      printOutput(`\n${format(colors.bright, "Allowed Methods:")} ${format(colors.cyan, data.allowed_methods.join(', '))}`);
+    }
+  }
+  
+  // Display allowed object methods if available
+  if (data.allowed_methods_object && data.allowed_methods_object.length > 0) {
+    if (markdownFormat) {
+      printOutput(`\n### Allowed Object Methods: \`${data.allowed_methods_object.join(', ')}\``);
+    } else {
+      printOutput(`\n${format(colors.bright, "Allowed Object Methods:")} ${format(colors.cyan, data.allowed_methods_object.join(', '))}`);
+    }
+  }
+  
+  // Display available prefixes/subresources if available
+  if (data.prefix && data.prefix.length > 0) {
+    if (markdownFormat) {
+      printOutput(`\n### Available Subresources\n`);
+      printOutput(`| Name | Methods |`);
+      printOutput(`| ---- | ------- |`);
+      
+      for (const prefix of data.prefix) {
+        const name = prefix.name || '';
+        const methods = prefix.methods ? prefix.methods.join(', ') : '';
+        
+        printOutput(`| ${name} | ${methods} |`);
+      }
+    } else {
+      printOutput(`\n${format(colors.bright + colors.magenta, "Available Subresources:")}\n`);
+      
+      for (const prefix of data.prefix) {
+        const name = prefix.name || '';
+        const methods = prefix.methods ? prefix.methods.join(', ') : '';
+        
+        printOutput(`  ${format(colors.green, name.padEnd(20))} ${format(colors.cyan, methods)}`);
+      }
     }
   }
   
@@ -347,7 +407,7 @@ export function formatJsonResponse(jsonData, options = {}) {
     
     for (const field of fields) {
       const info = data.table.Struct[field];
-      const required = info.required ? 'Yes' : 'No';
+      const required = info.null === false ? 'Yes' : 'No';
       const desc = info.desc || '';
       
       if (markdownFormat) {
@@ -363,8 +423,14 @@ export function formatJsonResponse(jsonData, options = {}) {
     if (markdownFormat) {
       printOutput(`\n### Procedure: \`${data.procedure.name || ''}\``);
       
-      if (data.procedure.desc) {
+      if (data.procedure.description) {
+        printOutput(`\n${data.procedure.description}`);
+      } else if (data.procedure.desc) {
         printOutput(`\n${data.procedure.desc}`);
+      }
+      
+      if (data.procedure.return_description) {
+        printOutput(`\n**Returns:** ${data.procedure.return_description}`);
       }
       
       if (data.procedure.args && data.procedure.args.length > 0) {
@@ -374,16 +440,23 @@ export function formatJsonResponse(jsonData, options = {}) {
         
         for (const arg of data.procedure.args) {
           const required = arg.required ? 'Yes' : 'No';
-          const desc = arg.desc || '';
+          const desc = arg.description || arg.desc || '';
+          const type = arg.type || '';
           
-          printOutput(`| ${arg.name || ''} | ${arg.type || ''} | ${required} | ${desc} |`);
+          printOutput(`| ${arg.name || ''} | ${type} | ${required} | ${desc} |`);
         }
       }
     } else {
       printOutput(`\n${format(colors.bright + colors.magenta, "Procedure:")} ${format(colors.green, data.procedure.name || '')}`);
       
-      if (data.procedure.desc) {
+      if (data.procedure.description) {
+        printOutput(`\n${data.procedure.description}`);
+      } else if (data.procedure.desc) {
         printOutput(`\n${data.procedure.desc}`);
+      }
+      
+      if (data.procedure.return_description) {
+        printOutput(`\n${format(colors.bright, "Returns:")} ${data.procedure.return_description}`);
       }
       
       if (data.procedure.args && data.procedure.args.length > 0) {
@@ -391,9 +464,10 @@ export function formatJsonResponse(jsonData, options = {}) {
         
         for (const arg of data.procedure.args) {
           const required = arg.required ? 'Yes' : 'No';
-          const desc = arg.desc || '';
+          const desc = arg.description || arg.desc || '';
+          const type = arg.type || '';
           
-          printOutput(`  ${format(colors.cyan, (arg.name || '').padEnd(20))} ${(arg.type || '').padEnd(15)} ${required.padEnd(10)} ${desc}`);
+          printOutput(`  ${format(colors.cyan, (arg.name || '').padEnd(20))} ${type.padEnd(15)} ${required.padEnd(10)} ${desc}`);
         }
       }
     }
@@ -409,12 +483,19 @@ export function formatJsonResponse(jsonData, options = {}) {
     
     for (const func of data.func) {
       const methodName = func.name || '';
+      const isStatic = func.static ? 'static ' : '';
       
       if (markdownFormat) {
-        printOutput(`#### \`${methodName}\``);
+        printOutput(`#### \`${isStatic}${methodName}()\``);
         
-        if (func.desc) {
+        if (func.description) {
+          printOutput(`\n${func.description}`);
+        } else if (func.desc) {
           printOutput(`\n${func.desc}`);
+        }
+        
+        if (func.return_description) {
+          printOutput(`\n**Returns:** ${func.return_description}`);
         }
         
         if (func.args && func.args.length > 0) {
@@ -424,16 +505,23 @@ export function formatJsonResponse(jsonData, options = {}) {
           
           for (const arg of func.args) {
             const required = arg.required ? 'Yes' : 'No';
-            const desc = arg.desc || '';
+            const desc = arg.description || arg.desc || '';
+            const type = arg.type || '';
             
-            printOutput(`| ${arg.name || ''} | ${arg.type || ''} | ${required} | ${desc} |`);
+            printOutput(`| ${arg.name || ''} | ${type} | ${required} | ${desc} |`);
           }
         }
       } else {
-        printOutput(`  ${format(colors.bright + colors.green, methodName)}`);
+        printOutput(`  ${format(colors.bright + colors.green, `${isStatic}${methodName}()`)}`);
         
-        if (func.desc) {
+        if (func.description) {
+          printOutput(`    ${func.description}`);
+        } else if (func.desc) {
           printOutput(`    ${func.desc}`);
+        }
+        
+        if (func.return_description) {
+          printOutput(`    ${format(colors.bright, "Returns:")} ${func.return_description}`);
         }
         
         if (func.args && func.args.length > 0) {
@@ -441,9 +529,10 @@ export function formatJsonResponse(jsonData, options = {}) {
           
           for (const arg of func.args) {
             const required = arg.required ? 'Yes' : 'No';
-            const desc = arg.desc || '';
+            const desc = arg.description || arg.desc || '';
+            const type = arg.type || '';
             
-            printOutput(`      ${format(colors.cyan, (arg.name || '').padEnd(20))} ${(arg.type || '').padEnd(15)} ${required.padEnd(10)} ${desc}`);
+            printOutput(`      ${format(colors.cyan, (arg.name || '').padEnd(20))} ${type.padEnd(15)} ${required.padEnd(10)} ${desc}`);
           }
         }
         
