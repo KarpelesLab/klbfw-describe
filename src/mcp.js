@@ -2,15 +2,24 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { describeApi, getApiResource, fetchDocumentation } from './api.js';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
 /**
  * Start an MCP server for programmatic access to the API description tool
  */
 export async function startMcpServer() {
+  // Get package version dynamically from package.json
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  const packagePath = join(__dirname, '..', 'package.json');
+  const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
+  
   // Create an MCP server
   const server = new McpServer({
     name: "klbfw-describe",
-    version: "0.5.13" // Match package.json version
+    version: packageJson.version
   });
   
   // Add describe tool with explicit schema
