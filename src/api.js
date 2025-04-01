@@ -4,6 +4,79 @@ import { DEFAULT_API_HOST, API_PREFIX, DOC_REPO_URL, colors } from './constants.
 import { formatMarkdown, createFormatter } from './utils.js';
 
 /**
+ * Fetch the list of available documentation resources
+ * Returns resources in MCP format with klb://intdoc/ URI prefix
+ */
+export function fetchDocResources() {
+  return new Promise((resolve, reject) => {
+    const docUrl = parse(`${DOC_REPO_URL}list.json`);
+    
+    const reqOptions = {
+      hostname: docUrl.hostname,
+      path: docUrl.pathname,
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
+      }
+    };
+    
+    const req = https.request(reqOptions, (res) => {
+      let data = '';
+      
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      res.on('end', () => {
+        if (res.statusCode !== 200) {
+          resolve([]);
+          return;
+        }
+        
+        try {
+          // Parse the JSON response
+          const resources = JSON.parse(data);
+          
+          // Add klb://intdoc/ prefix to each resource URI
+          resources.forEach(resource => {
+            resource.uri = `klb://intdoc/${resource.uri}`;
+          });
+          
+          resolve(resources);
+        } catch (e) {
+          // Return empty array on parsing error
+          resolve([]);
+        }
+      });
+    });
+    
+    req.on('error', (e) => {
+      reject(e);
+    });
+    
+    req.end();
+  });
+}
+
+/**
+ * Fetch the list of available documentation files (just the names)
+ */
+export function fetchDocFileList() {
+  return new Promise((resolve, reject) => {
+    fetchDocResources()
+      .then(resources => {
+        // Extract just the file names from resource URIs
+        const fileList = resources.map(resource => {
+          // Extract filename from the URI (after klb://intdoc/)
+          return resource.uri.substring('klb://intdoc/'.length);
+        });
+        resolve(fileList);
+      })
+      .catch(reject);
+  });
+}
+
+/**
  * Perform an OPTIONS request to the specified API endpoint
  */
 export function describeApi(apiPath, options = {}) {
@@ -200,27 +273,12 @@ export function getApiResource(apiPath, options = {}) {
 }
 
 /**
- * Fetch and display documentation from GitHub repository
+ * Fetch raw documentation content from GitHub repository
+ * Simplified version that just returns the raw content
  */
-export function fetchDocumentation(fileName = 'README.md', options = {}) {
+export function fetchDocumentation(fileName = 'README.md') {
   return new Promise((resolve, reject) => {
-    const { 
-      output = console.log,
-      useColors = true,
-      markdownFormat = false
-    } = options;
-    
-    const { printOutput, format } = createFormatter({ useColors, output });
-    
     const docUrl = parse(`${DOC_REPO_URL}${fileName}`);
-    
-    if (markdownFormat) {
-      printOutput(`## Fetching documentation: \`${fileName}\``);
-      printOutput(`**Source:** ${DOC_REPO_URL}${fileName}\n`);
-    } else {
-      printOutput(`\n${format(colors.bright + colors.blue, "Fetching documentation:")} ${format(colors.green, fileName)}`);
-      printOutput(`${format(colors.dim, "Source: " + DOC_REPO_URL + fileName)}\n`);
-    }
     
     const reqOptions = {
       hostname: docUrl.hostname,
@@ -240,39 +298,16 @@ export function fetchDocumentation(fileName = 'README.md', options = {}) {
       
       res.on('end', () => {
         if (res.statusCode !== 200) {
-          if (markdownFormat) {
-            printOutput(`**Status:** ${res.statusCode}`);
-            printOutput(`**Error:** Unable to fetch documentation`);
-          } else {
-            printOutput(`${format(colors.bright, "Status:")} ${format(colors.red, res.statusCode.toString())}`);
-            printOutput(`${format(colors.red, "Error: Unable to fetch documentation")}`);
-          }
-          resolve();
+          resolve(''); // Return empty string on error
           return;
         }
         
-        // Display the markdown content
-        if (markdownFormat) {
-          // For MCP mode, we're already in markdown, so just output the raw documentation
-          printOutput(`\n## Documentation\n`);
-          printOutput(data); // Return the raw markdown directly
-        } else {
-          printOutput(`${format(colors.bright + colors.blue, "Documentation:")}\n`);
-          
-          // Apply some basic Markdown formatting for terminal output
-          const formattedText = formatMarkdown(data);
-          printOutput(formattedText);
-        }
-        resolve();
+        // Return the raw markdown content
+        resolve(data);
       });
     });
     
     req.on('error', (e) => {
-      if (markdownFormat) {
-        printOutput(`**Error:** ${e.message}`);
-      } else {
-        printOutput(`${format(colors.red, "Error:")} ${e.message}`);
-      }
       reject(e);
     });
     
