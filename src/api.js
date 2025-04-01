@@ -4,10 +4,10 @@ import { DEFAULT_API_HOST, API_PREFIX, DOC_REPO_URL, colors } from './constants.
 import { formatMarkdown, createFormatter } from './utils.js';
 
 /**
- * Fetch the list of available documentation resources
+ * Fetch the list of available documentation files
  * Returns resources in MCP format with klb://intdoc/ URI prefix
  */
-export function fetchDocResources() {
+export function fetchDocFileList() {
   return new Promise((resolve, reject) => {
     const docUrl = parse(`${DOC_REPO_URL}list.json`);
     
@@ -55,24 +55,6 @@ export function fetchDocResources() {
     });
     
     req.end();
-  });
-}
-
-/**
- * Fetch the list of available documentation files (just the names)
- */
-export function fetchDocFileList() {
-  return new Promise((resolve, reject) => {
-    fetchDocResources()
-      .then(resources => {
-        // Extract just the file names from resource URIs
-        const fileList = resources.map(resource => {
-          // Extract filename from the URI (after klb://intdoc/)
-          return resource.uri.substring('klb://intdoc/'.length);
-        });
-        resolve(fileList);
-      })
-      .catch(reject);
   });
 }
 

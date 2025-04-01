@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { ListResourcesRequestSchema, ReadResourceRequestSchema } from "@modelcontextprotocol/sdk/schemas.js";
 import { z } from "zod";
-import { describeApi, getApiResource, fetchDocumentation, fetchDocFileList, fetchDocResources } from './api.js';
+import { describeApi, getApiResource, fetchDocumentation, fetchDocFileList } from './api.js';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -132,8 +132,8 @@ export async function startMcpServer() {
   server.setRequestHandler(ListResourcesRequestSchema, async () => {
     try {
       // Fetch the list of available documentation resources
-      // These already come in MCP resource format with klb://intdoc/ prefixes
-      const resources = await fetchDocResources();
+      // These come in MCP resource format with klb://intdoc/ prefixes
+      const resources = await fetchDocFileList();
       
       // We don't need to add the list resource since it's not directly accessible
       
