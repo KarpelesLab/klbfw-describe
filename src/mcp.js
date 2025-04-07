@@ -1,6 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { ListResourcesRequestSchema, ReadResourceRequestSchema } from "@modelcontextprotocol/sdk/schemas.js";
+import {
+  CallToolRequestSchema,
+  ListResourcesRequestSchema,
+  ListToolsRequestSchema,
+  ReadResourceRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { describeApi, getApiResource, fetchDocumentation, fetchDocFileList } from './api.js';
 import { readFileSync } from 'fs';
@@ -129,14 +134,13 @@ export async function startMcpServer() {
   
   // Set up resource handlers for the klb://intdoc/ scheme
   // List Resources Handler
-  server.setRequestHandler(ListResourcesRequestSchema, async () => {
+  server.server.setRequestHandler(ListResourcesRequestSchema, async () => {
     try {
       // Fetch the list of available documentation resources
       // These come in MCP resource format with klb://intdoc/ prefixes
       const resources = await fetchDocFileList();
       
       // We don't need to add the list resource since it's not directly accessible
-      
       return {
         resources
       };
@@ -147,7 +151,7 @@ export async function startMcpServer() {
   });
   
   // Read Resource Handler
-  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  server.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     const uri = request.params.uri;
     
     // Only handle klb://intdoc/ URIs

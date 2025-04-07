@@ -32,7 +32,7 @@ export async function processArguments(args) {
     }
   }
   
-  // Start MCP server if requested
+  // Check for MCP mode first before any other processing
   if (mcpMode) {
     await startMcpServer();
     return; // MCP server handles its own lifecycle
