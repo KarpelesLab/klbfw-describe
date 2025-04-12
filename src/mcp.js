@@ -126,6 +126,57 @@ export async function startMcpServer() {
     }
   );
   
+  // Add intdoc_list tool to list available documentation resources
+  server.tool(
+    "intdoc_list",
+    "List available KLBFW backend integration documentation resources",
+    {},
+    async () => {
+      try {
+        // Fetch documentation resource list
+        const resources = await fetchDocFileList();
+        
+        // Format the resources for display
+        let output = '## Available KLBFW Backend Integration Documentation\n\n';
+        output += '| Resource | Title |\n';
+        output += '| -------- | ----- |\n';
+        
+        resources.forEach(resource => {
+          const uri = resource.uri.replace('klb://intdoc/', '');
+          const title = resource.title || uri;
+          output += `| \`${uri}\` | ${title} |\n`;
+        });
+        
+        return { content: [{ type: "text", text: output }] };
+      } catch (error) {
+        return { content: [{ type: "text", text: `Error retrieving documentation list: ${error.message}` }] };
+      }
+    }
+  );
+  
+  // Add intdoc_get tool to fetch a specific documentation resource
+  server.tool(
+    "intdoc_get",
+    "Fetch a specific KLBFW backend integration documentation resource by filename",
+    {
+      filename: z.string().min(1).describe("The documentation filename to retrieve from the integration docs")
+    },
+    async (params) => {
+      try {
+        // Fetch the documentation content
+        const content = await fetchDocumentation(params.filename);
+        
+        if (!content) {
+          return { content: [{ type: "text", text: `Resource not found: ${params.filename}` }] };
+        }
+        
+        return { content: [{ type: "text", text: content }] };
+      } catch (error) {
+        return { content: [{ type: "text", text: `Error retrieving documentation: ${error.message}` }] };
+      }
+    }
+  );
+  
   // Set up dynamic resource handler for the klb://intdoc/ scheme
   server.resource(
     "documentation",

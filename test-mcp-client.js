@@ -5,7 +5,8 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 // Choose which command to test 
-// Options: tool, resource, list_resources, list_tools
+// Options: tool, resource, list_resources, list_tools, 
+//          intdoc_list, intdoc_get
 const testMode = process.argv[2] || 'tool';
 const apiPath = process.argv[3] || 'User';
 
@@ -69,6 +70,24 @@ async function main() {
           arguments: {
             apiPath: apiPath,
             raw: false
+          }
+        });
+        break;
+
+      case 'intdoc_list':
+        console.log("Listing available documentation resources");
+        result = await client.callTool({
+          name: "intdoc_list",
+          arguments: {}
+        });
+        break;
+        
+      case 'intdoc_get':
+        console.log(`Retrieving documentation file: ${apiPath}`);
+        result = await client.callTool({
+          name: "intdoc_get",
+          arguments: {
+            filename: apiPath
           }
         });
         break;
