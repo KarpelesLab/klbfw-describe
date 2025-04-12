@@ -1,11 +1,5 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  CallToolRequestSchema,
-  ListResourcesRequestSchema,
-  ListToolsRequestSchema,
-  ReadResourceRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { describeApi, getApiResource, fetchDocumentation, fetchDocFileList } from './api.js';
 import { readFileSync } from 'fs';
@@ -132,52 +126,45 @@ export async function startMcpServer() {
     }
   );
   
-  // Set up resource handlers for the klb://intdoc/ scheme
-  // List Resources Handler
-  server.server.setRequestHandler(ListResourcesRequestSchema, async () => {
-    try {
-      // Fetch the list of available documentation resources
-      // These come in MCP resource format with klb://intdoc/ prefixes
-      const resources = await fetchDocFileList();
-      
-      // We don't need to add the list resource since it's not directly accessible
-      return {
-        resources
-      };
-    } catch (error) {
-      // In case of error, return an empty list
-      return { resources: [] };
+  // Set up dynamic resource handler for the klb://intdoc/ scheme
+  server.resource(
+    "documentation",
+    new ResourceTemplate("klb://intdoc/{filename}", { 
+      list: async () => {
+        try {
+          // Fetch the list of available documentation resources
+          // These come in MCP resource format with klb://intdoc/ prefixes
+          const resources = await fetchDocFileList();
+          return { resources };
+        } catch (error) {
+          // In case of error, return an empty list
+          return { resources: [] };
+        }
+      }
+    }),
+    async (uri, { filename }) => {
+      try {
+        // We don't allow fetching the list as a resource
+        if (filename === "list") {
+          throw new Error("Resource not available");
+        }
+        
+        // For regular documentation files, fetch and return the raw content
+        const content = await fetchDocumentation(filename);
+        
+        return {
+          contents: [{
+            uri: uri.href,
+            mimeType: "text/markdown",
+            text: content
+          }]
+        };
+      } catch (error) {
+        // In case of error, return an empty content
+        throw new Error(`Failed to fetch documentation resource: ${error.message}`);
+      }
     }
-  });
-  
-  // Read Resource Handler
-  server.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-    const uri = request.params.uri;
-    
-    // Only handle klb://intdoc/ URIs
-    if (!uri.startsWith("klb://intdoc/")) {
-      throw new Error("Unsupported resource URI scheme");
-    }
-    
-    // Extract the file name from the URI
-    const fileName = uri.substring("klb://intdoc/".length);
-    
-    // We don't allow fetching the list as a resource
-    if (fileName === "list") {
-      throw new Error("Resource not available");
-    }
-    
-    // For regular documentation files, fetch and return the raw content
-    const content = await fetchDocumentation(fileName);
-    
-    return {
-      contents: [{
-        uri,
-        mimeType: "text/markdown",
-        text: content
-      }]
-    };
-  });
+  );
   
   // Start receiving messages on stdin and sending messages on stdout
   const transport = new StdioServerTransport();

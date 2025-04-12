@@ -1,131 +1,126 @@
 #!/usr/bin/env node
 
-// Finding details on the actual MCP jsonrpc methods was surprisingly hard.
-// See: https://spec.modelcontextprotocol.io/specification/2024-11-05/server/tools/
-
-// A simple script to test the MCP server by sending a command
-import { exec } from 'child_process';
+// A simple script to test the MCP server using the official SDK client
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import fs from 'fs';
 
 // Choose which command to test 
-// Options: tool, resource, raw, typescript, list
+// Options: tool, resource, list_resources, list_tools
 const testMode = process.argv[2] || 'tool';
 const apiPath = process.argv[3] || 'User';
 
-// Correct MCP format for tool calls
-const toolCommand = {
-  "jsonrpc": "2.0",
-  "id": "test-1",
-  "method": "tools/call",
-  "params": {
-    "name": "describe",
-    "arguments": {
-      "apiPath": apiPath
-    }
-  }
-};
+async function main() {
+  // Set a timeout to ensure the script doesn't hang
+  const timeout = setTimeout(() => {
+    console.error("Timeout: MCP operation took too long");
+    process.exit(1);
+  }, 10000); // 10 second timeout
+  const transport = new StdioClientTransport({
+    command: "node",
+    args: ["index.js", "--mcp"]
+  });
 
-// Base URL for resources (must be a full URL)
-const baseUrl = "http://localhost";
+  const client = new Client({
+    name: "klbfw-describe-test-client",
+    version: "1.0.0"
+  });
 
-// Correct MCP format for resource read (formatted description)
-const resourceCommand = {
-  "jsonrpc": "2.0",
-  "id": "test-2",
-  "method": "resources/read",
-  "params": {
-    "uri": baseUrl + "/api/" + apiPath
-  }
-};
-
-// Correct MCP format for raw resource read
-const rawResourceCommand = {
-  "jsonrpc": "2.0",
-  "id": "test-3",
-  "method": "resources/read",
-  "params": {
-    "uri": baseUrl + "/api/raw/" + (apiPath.includes('/') ? encodeURIComponent(apiPath) : apiPath)
-  }
-};
-
-// Correct MCP format for TypeScript resource read
-const tsResourceCommand = {
-  "jsonrpc": "2.0",
-  "id": "test-4",
-  "method": "resources/read",
-  "params": {
-    "uri": baseUrl + "/api/typescript/" + (apiPath.includes('/') ? encodeURIComponent(apiPath) : apiPath)
-  }
-};
-
-// Correct MCP format for listing available resources
-const listResourcesCommand = {
-  "jsonrpc": "2.0",
-  "id": "test-5",
-  "method": "resources/list",
-  "params": {}
-};
-
-// Select the appropriate command based on test mode
-let command;
-switch (testMode) {
-  case 'resource':
-    command = resourceCommand;
-    break;
-  case 'raw':
-    command = rawResourceCommand;
-    break;
-  case 'typescript':
-    command = tsResourceCommand;
-    break;
-  case 'list':
-    command = listResourcesCommand;
-    break;
-  default:
-    command = toolCommand;
-}
-
-const serverProcess = exec('node index.js --mcp', {
-  stdio: ['pipe', 'pipe', 'inherit']
-});
-
-// Write the command as a newline-terminated JSON string
-serverProcess.stdin.write(JSON.stringify(command) + '\n');
-
-// Collect response
-let responseData = '';
-serverProcess.stdout.on('data', (data) => {
-  responseData += data.toString();
-  
   try {
-    // Check if we have a complete JSON response
-    const response = JSON.parse(responseData);
-    console.log('Received response:');
-    console.log(JSON.stringify(response, null, 2));
+    await client.connect(transport);
+    console.log("Connected to MCP server");
+
+    let result;
+    const outputFile = `test-mcp-${testMode}.json`;
+
+    switch (testMode) {
+      case 'tool':
+        console.log(`Calling describe tool with path: ${apiPath}`);
+        result = await client.callTool({
+          name: "describe",
+          arguments: {
+            apiPath: apiPath
+          }
+        });
+        break;
+        
+      case 'tool_raw':
+        console.log(`Calling describe_raw tool with path: ${apiPath}`);
+        result = await client.callTool({
+          name: "describe_raw",
+          arguments: {
+            apiPath: apiPath
+          }
+        });
+        break;
+
+      case 'tool_ts':
+        console.log(`Calling produce_ts tool with path: ${apiPath}`);
+        result = await client.callTool({
+          name: "produce_ts",
+          arguments: {
+            apiPath: apiPath
+          }
+        });
+        break;
+        
+      case 'tool_get':
+        console.log(`Calling get tool with path: ${apiPath}`);
+        result = await client.callTool({
+          name: "get",
+          arguments: {
+            apiPath: apiPath,
+            raw: false
+          }
+        });
+        break;
+
+      case 'resource':
+        console.log(`Reading documentation resource: ${apiPath}`);
+        result = await client.readResource({
+          uri: `klb://intdoc/${apiPath}`
+        });
+        break;
+
+      case 'list_resources':
+        console.log("Listing available resources");
+        result = await client.listResources();
+        break;
+
+      case 'list_tools':
+        console.log("Listing available tools");
+        result = await client.listTools();
+        break;
+
+      default:
+        console.error(`Unknown test mode: ${testMode}`);
+        process.exit(1);
+    }
+
+    console.log("Result:");
+    console.log(JSON.stringify(result, null, 2));
     
     // Save to file for inspection
-    const outputFile = `test-mcp-${testMode}.json`;
-    fs.writeFileSync(outputFile, JSON.stringify(response, null, 2));
+    fs.writeFileSync(outputFile, JSON.stringify(result, null, 2));
     
-    // Exit after getting response
-    setTimeout(() => {
-      serverProcess.kill();
-      process.exit(0);
-    }, 100);
-  } catch (e) {
-    // Not a complete JSON yet, continue collecting
+    // Close the client connection
+    await client.close();
+  } catch (error) {
+    console.error("Error:", error.message);
+    // Close the client connection on error
+    try {
+      await client.close();
+    } catch (closeError) {
+      // Ignore any errors during close
+    }
+    process.exit(1);
+  } finally {
+    // Clear the timeout
+    clearTimeout(timeout);
   }
-});
+}
 
-// Handle server exit
-serverProcess.on('exit', (code) => {
-  console.log(`Server process exited with code ${code}`);
-  process.exit(code);
-});
-
-// Exit after 10 seconds if no response
-setTimeout(() => {
-  console.log('Timeout waiting for response');
-  serverProcess.kill();
+main().catch(err => {
+  console.error("Fatal error:", err);
   process.exit(1);
-}, 10000);
+});
