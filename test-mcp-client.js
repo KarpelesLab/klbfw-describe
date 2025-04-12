@@ -3,7 +3,6 @@
 // A simple script to test the MCP server using the official SDK client
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import fs from 'fs';
 
 // Choose which command to test 
 // Options: tool, resource, list_resources, list_tools
@@ -31,7 +30,6 @@ async function main() {
     console.log("Connected to MCP server");
 
     let result;
-    const outputFile = `test-mcp-${testMode}.json`;
 
     switch (testMode) {
       case 'tool':
@@ -99,9 +97,6 @@ async function main() {
 
     console.log("Result:");
     console.log(JSON.stringify(result, null, 2));
-    
-    // Save to file for inspection
-    fs.writeFileSync(outputFile, JSON.stringify(result, null, 2));
     
     // Close the client connection
     await client.close();
