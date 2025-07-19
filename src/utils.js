@@ -58,3 +58,35 @@ export function createFormatter(options = {}) {
     format
   };
 }
+
+/**
+ * Strip parameters from an API path for OPTIONS requests
+ * 
+ * Removes path segments that are arguments (not starting with uppercase letter)
+ * Examples:
+ *   - User/:user/Wallet -> User/Wallet
+ *   - Order/ord-123456-12456 -> Order
+ *   - User/ce8b57ca-8961-49c5-863a-b79ab3e1e4a0 -> User
+ *   - Content/Cms/page-123/History -> Content/Cms/History
+ * 
+ * @param {string} apiPath - The API path to strip parameters from
+ * @returns {string} The stripped API path
+ */
+export function stripParametersFromPath(apiPath) {
+  if (!apiPath) return apiPath;
+  
+  // Split the path by forward slashes
+  const segments = apiPath.split('/');
+  
+  // Filter out segments that don't start with an uppercase letter
+  const filteredSegments = segments.filter(segment => {
+    // Keep empty segments (for leading slash)
+    if (!segment) return true;
+    
+    // Keep segments that start with an uppercase letter
+    return /^[A-Z]/.test(segment);
+  });
+  
+  // Join the filtered segments back together
+  return filteredSegments.join('/');
+}

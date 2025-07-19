@@ -1,7 +1,7 @@
 import https from 'https';
 import { parse } from 'url';
 import { DEFAULT_API_HOST, API_PREFIX, DOC_REPO_URL, colors } from './constants.js';
-import { formatMarkdown, createFormatter } from './utils.js';
+import { formatMarkdown, createFormatter, stripParametersFromPath } from './utils.js';
 
 /**
  * Fetch the list of available documentation files
@@ -73,15 +73,24 @@ export function describeApi(apiPath, options = {}) {
     
     const { printOutput, format } = createFormatter({ useColors, output });
     
+    // Strip parameters from the path for OPTIONS request
+    const strippedPath = stripParametersFromPath(apiPath);
+    
     if (markdownFormat) {
       printOutput(`## Describing API endpoint: \`${apiPath}\``);
+      if (strippedPath !== apiPath) {
+        printOutput(`**Stripped path for OPTIONS:** \`${strippedPath}\``);
+      }
       printOutput(`**Host:** ${DEFAULT_API_HOST}\n`);
     } else {
       printOutput(`\n${format(colors.bright + colors.blue, "Describing API endpoint:")} ${format(colors.green, apiPath)}`);
+      if (strippedPath !== apiPath) {
+        printOutput(`${format(colors.dim, "Stripped path for OPTIONS:")} ${format(colors.cyan, strippedPath)}`);
+      }
       printOutput(`${format(colors.dim, "Host: " + DEFAULT_API_HOST)}\n`);
     }
     
-    const reqUrl = parse(`https://${DEFAULT_API_HOST}${API_PREFIX}${apiPath}`);
+    const reqUrl = parse(`https://${DEFAULT_API_HOST}${API_PREFIX}${strippedPath}`);
     
     const reqOptions = {
       hostname: reqUrl.hostname,

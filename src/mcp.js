@@ -2,6 +2,7 @@ import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mc
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { describeApi, getApiResource, fetchDocumentation, fetchDocFileList } from './api.js';
+import { stripParametersFromPath } from './utils.js';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -29,9 +30,9 @@ export async function startMcpServer() {
   // Add describe tool with explicit schema
   server.tool(
     "describe",
-    "Describe an API endpoint by its path with formatted output",
+    "Describe an API endpoint by its path with formatted output. Automatically strips parameters (segments not starting with uppercase) for OPTIONS request.",
     {
-      apiPath: z.string().min(1).describe("The API endpoint path to describe")
+      apiPath: z.string().min(1).describe("The API endpoint path to describe (parameters will be auto-stripped for OPTIONS)")
     },
     async (params) => {
       let output = '';
@@ -54,9 +55,9 @@ export async function startMcpServer() {
   // Add describe_raw tool with explicit schema
   server.tool(
     "describe_raw",
-    "Obtain the raw json output description of an API",
+    "Obtain the raw json output description of an API. Automatically strips parameters (segments not starting with uppercase) for OPTIONS request.",
     {
-      apiPath: z.string().min(1).describe("The API endpoint path to describe")
+      apiPath: z.string().min(1).describe("The API endpoint path to describe (parameters will be auto-stripped for OPTIONS)")
     },
     async (params) => {
       let output = '';
@@ -79,9 +80,9 @@ export async function startMcpServer() {
   // Add produce_ts tool with explicit schema
   server.tool(
     "produce_ts",
-    "Generate TypeScript definitions for an API endpoint",
+    "Generate TypeScript definitions for an API endpoint. Automatically strips parameters (segments not starting with uppercase) for OPTIONS request.",
     {
-      apiPath: z.string().min(1).describe("The API endpoint path to generate TypeScript for")
+      apiPath: z.string().min(1).describe("The API endpoint path to generate TypeScript for (parameters will be auto-stripped for OPTIONS)")
     },
     async (params) => {
       let output = '';
